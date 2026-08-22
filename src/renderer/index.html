@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek 余额小鲸鱼</title>
+  <link rel="stylesheet" href="./css/widget.css">
+</head>
+<body>
+  <div id="app-container">
+    <div id="whale-root" class="dshwv-root">
+      <div id="whale-body" class="dshwv-body">
+        <img id="whale-img" class="dshwv-img" src="../../assets/DSniang1.png" alt="DeepSeek 小鲸鱼" draggable="false">
+        
+        <div id="whale-bubble" class="dshwv-bubble">
+          <svg viewBox="0 0 1026 700" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+            <path class="dshwv-bshape" fill="#FFFFFF" stroke="#203170" stroke-width="18" stroke-linejoin="round" stroke-linecap="round" d="M 827 248 A 373 232 0 1 0 81 246 A 373 232 0 0 0 301 465 A 57 32 10 0 0 413 484 A 373 232 0 0 0 827 248 Z"/>
+            <ellipse class="dshwv-b1" cx="352" cy="561" rx="37.5" ry="26" fill="#FFFFFF" stroke="#203170" stroke-width="18"/>
+            <ellipse class="dshwv-b2" cx="442" cy="646" rx="24.5" ry="18" fill="#FFFFFF" stroke="#203170" stroke-width="18"/>
+          </svg>
+
+          <img id="whale-gif" class="dshwv-gif" src="../../assets/rua.gif" alt="" draggable="false">
+
+          <div id="whale-text" class="dshwv-text">
+            <div id="whale-label" class="dshwv-label">DeepSeek 余额</div>
+            <div id="whale-amount" class="dshwv-amount">…</div>
+            <div id="whale-hint" class="dshwv-hint">加载中…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 悬停汉堡菜单按钮 -->
+      <button id="menu-btn" type="button" class="dshwv-menu-btn" title="菜单">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <!-- 汉堡设置面板 -->
+      <div id="menu-box" class="dshwv-menu">
+        <div class="dshwv-menu-row">
+          <span>大小</span>
+          <input id="scale-range" type="range" class="dshwv-range" min="0.6" max="2.5" step="0.1" value="1.5">
+          <input id="scale-number" type="number" class="dshwv-number" min="1" max="20" step="1" value="10">
+        </div>
+        <div class="dshwv-menu-row">
+          <span>音效</span>
+          <select id="sound-select" class="dshwv-sound">
+            <option value="duck">小黄鸭</option>
+            <option value="fx1">音效1</option>
+          </select>
+        </div>
+        <div class="dshwv-menu-row">
+          <span>音量</span>
+          <input id="vol-range" type="range" class="dshwv-range" min="0" max="1" step="0.05" value="0.9">
+          <span id="vol-pct" class="dshwv-volpct">90%</span>
+        </div>
+        <div class="dshwv-menu-row">
+          <span>用量</span>
+          <select id="usage-select" class="dshwv-sound">
+            <option value="ledger">小鲸鱼记账 (推荐)</option>
+            <option value="token">实时·令牌 (峰谷换算)</option>
+          </select>
+        </div>
+        <div class="dshwv-menu-row">
+          <span>峰谷</span>
+          <select id="peak-select" class="dshwv-sound">
+            <option value="default">默认</option>
+            <option value="liangwen">梁文峰谷</option>
+            <option value="qiangqiang">!?强强?!</option>
+          </select>
+        </div>
+        <div class="dshwv-menu-row">
+          <span>气泡</span>
+          <input id="bubble-toggle" type="checkbox" class="dshwv-check" checked title="开启/关闭思考气泡">
+        </div>
+        
+        <div class="dshwv-menu-sep"></div>
+
+        <div class="dshwv-menu-row">
+          <span>每轮消耗</span>
+          <input id="turn-cost-toggle" type="checkbox" class="dshwv-check" checked title="每轮对话结束后自动显示本轮消耗金额">
+        </div>
+        <div class="dshwv-menu-row">
+          <span>自动关闭</span>
+          <input id="turn-cost-close" type="number" class="dshwv-number" min="0" step="1" value="5" title="填 0 表示不自动关闭，需手动点击关闭">
+          <span>秒</span>
+        </div>
+
+        <div class="dshwv-menu-sep"></div>
+
+        <div class="dshwv-menu-row" style="margin-top: 8px;">
+          <button id="open-settings-btn" type="button" class="dshwv-settings-btn">⚙️ 凭据与高级设置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/hit-test.js"></script>
+  <script src="./js/audio.js"></script>
+  <script src="./js/widget.js"></script>
+</body>
+</html>

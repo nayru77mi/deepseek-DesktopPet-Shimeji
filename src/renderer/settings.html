@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek 小鲸鱼 - 设置中心</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f4f6fb;
+      color: #203170;
+      padding: 20px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid rgba(32, 49, 112, 0.15);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #203170;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 5px;
+      color: #3b4e8c;
+    }
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    input[type="text"],
+    input[type="password"],
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 12px;
+      border: 1px solid #ced6eb;
+      border-radius: 6px;
+      outline: none;
+      color: #203170;
+      background: #fbfcfe;
+      transition: border-color .15s ease;
+    }
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    input[type="number"]:focus {
+      border-color: #203170;
+    }
+    .btn-toggle-pw {
+      background: #eef2fb;
+      border: 1px solid #ced6eb;
+      border-radius: 6px;
+      padding: 0 10px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #203170;
+    }
+    .help-text {
+      font-size: 11px;
+      color: #8c9ac2;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .checkbox-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #203170;
+      cursor: pointer;
+    }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .btn {
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s ease;
+    }
+    .btn-primary {
+      background: #203170;
+      color: #ffffff;
+    }
+    .btn-secondary {
+      background: #e2e8f5;
+      color: #203170;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 4px;
+      background: #eef2fb;
+      color: #203170;
+      border: 1px solid #ced6eb;
+      cursor: pointer;
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #203170;
+      color: #ffffff;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+      z-index: 999;
+    }
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🐋 DeepSeek 小鲸鱼 - 设置中心</h2>
+
+    <!-- API 凭据配置 -->
+    <div class="card">
+      <div class="card-title">
+        <span>🔑 DeepSeek 凭据配置</span>
+        <button id="btn-test-balance" type="button" class="btn-sm">测试拉取余额</button>
+      </div>
+
+      <div class="form-group">
+        <label for="input-api-key">DEEPSEEK_API_KEY (必需)</label>
+        <div class="input-row">
+          <input id="input-api-key" type="password" placeholder="sk-...">
+          <button id="btn-toggle-key" type="button" class="btn-toggle-pw">👁️</button>
+        </div>
+        <div class="help-text">用于拉取当前 API 账户余额。可在 DeepSeek 开发者平台 API Keys 页面生成。</div>
+      </div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="input-platform-token">DEEPSEEK_PLATFORM_TOKEN (选填，用于实时令牌用量)</label>
+        <div class="input-row">
+          <input id="input-platform-token" type="password" placeholder="Bearer eyJ...">
+          <button id="btn-toggle-token" type="button" class="btn-toggle-pw">👁️</button>
+        </div>
+        <div class="help-text">用于「实时·令牌」用量换算。若不填写则默认使用更便捷的「小鲸鱼记账」模式（免令牌）。</div>
+      </div>
+    </div>
+
+    <!-- 桌面系统设置 -->
+    <div class="card">
+      <div class="card-title">🖥️ 桌面系统与挂件设置</div>
+      
+      <div class="form-group">
+        <label class="checkbox-row">
+          <input id="chk-always-on-top" type="checkbox" checked>
+          <span>窗口始终置顶 (Always on Top)</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="checkbox-row">
+          <input id="chk-open-at-login" type="checkbox">
+          <span>开机自动启动 (Auto Launch)</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="input-listener-port">每轮消耗统计本地监听端口</label>
+        <div class="input-row">
+          <input id="input-listener-port" type="number" value="37189" style="max-width: 120px;">
+          <button id="btn-test-cost" type="button" class="btn-sm">测试触发消耗泡泡</button>
+        </div>
+        <div class="help-text">通过此 HTTP 端口接收外部会话（如 DSH、Cursor 等）的对话 token 消耗事件。</div>
+      </div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <div class="actions">
+      <button id="btn-cancel" type="button" class="btn btn-secondary">关闭</button>
+      <button id="btn-save" type="button" class="btn btn-primary">保存配置</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">设置已保存</div>
+
+  <script src="./js/settings.js"></script>
+</body>
+</html>
