@@ -543,6 +543,25 @@
     }, 150)
   }
 
+  // Scale changes are persisted debounced (off the release hot path) so the
+  // synchronous disk write can never cause a visible hitch right when the
+  // slider is released.
+  let scaleSaveTimer = null
+  function scheduleScaleSave() {
+    if (scaleSaveTimer) clearTimeout(scaleSaveTimer)
+    scaleSaveTimer = setTimeout(() => {
+      scaleSaveTimer = null
+      saveConfig()
+    }, 400)
+  }
+  function commitScaleSave() {
+    if (scaleSaveTimer) {
+      clearTimeout(scaleSaveTimer)
+      scaleSaveTimer = null
+    }
+    saveConfig()
+  }
+
   // Anchor the open menu to the whale's bottom-right corner at a FIXED
   // pixel offset (instead of a percentage of the whale height). While the
   // window is frozen during a scale drag, the menu therefore stays exactly
@@ -567,17 +586,14 @@
     scaleNumber.value = String(scaleToDisplay(next))
 
     if (save) {
-      // Slider released: re-anchor the menu to the new whale size first,
-      // then resize the window once (menu-fit math uses the fresh anchor),
-      // and persist.
+      // Slider released: NOTHING visual happens here — the window and menu
+      // stay exactly where they were during the drag, so releasing can never
+      // flash. Only the scale is persisted, debounced off this hot path.
       if (scaleResizeTimer) {
         clearTimeout(scaleResizeTimer)
         scaleResizeTimer = null
       }
-      scaleResizeSeq++
-      anchorMenuToWindow()
-      flushWindowResize(scaleResizeSeq)
-      saveConfig()
+      scheduleScaleSave()
     } else if (!menuOpen) {
       // External config change (menu closed): resize once, debounced.
       scheduleResize()
@@ -597,7 +613,7 @@
     return Math.ceil(rootH + 25 - menuBox.offsetTop)
   }
 
-  async function flushWindowResize(seq) {
+  async function flushWindowResize(seq, givenBounds, givenWorkArea) {
     const basePx = Math.round(180 * state.scale)
     let winWidth = basePx + 180
     let winHeight = basePx + 200
@@ -605,9 +621,9 @@
     // otherwise its top rows (e.g. the size slider) get clipped again.
     if (menuOpen) winHeight = Math.max(winHeight, menuNeededWindowHeight())
 
-    const currentBounds = await window.electronAPI.getWindowBounds()
-    const workArea = await window.electronAPI.getWorkArea()
-    if (seq !== undefined && seq !== scaleResizeSeq) return // stale flush
+    const currentBounds = givenBounds || (await window.electronAPI.getWindowBounds())
+    const workArea = givenWorkArea || (await window.electronAPI.getWorkArea())
+    if (seq !== undefined && seq !== scaleResizeSeq) return null // stale flush
 
     let newX = currentBounds.x
     let newY = currentBounds.y
@@ -633,12 +649,9 @@
     newX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - winWidth, newX))
     newY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - winHeight, newY))
 
-    window.electronAPI.setWindowBounds({
-      x: newX,
-      y: newY,
-      width: winWidth,
-      height: winHeight,
-    })
+    const applied = { x: newX, y: newY, width: winWidth, height: winHeight }
+    window.electronAPI.setWindowBounds(applied)
+    return applied
   }
 
   // When the menu opens, grow the window upward if the current (possibly
@@ -733,10 +746,10 @@
       window.electronAPI.setIgnoreMouseEvents(false)
       anchorMenuToWindow()
       fitWindowForMenu()
-    } else {
-      // Restore the scale-based window size now that the menu is closed.
-      flushWindowResize()
     }
+    // On close the window keeps its current size — it is tightened to the
+    // whale scale at the next whale drag — so closing the menu can never
+    // trigger a resize flash either.
   }
 
   function closeMenu() {
@@ -744,7 +757,8 @@
     menuOpen = false
     menuBox.classList.remove('dshwv-menu-open')
     menuBtn.classList.remove('dshwv-menu-btn-visible')
-    flushWindowResize()
+    // Commit the scale change (deferred from slider release) on menu close.
+    commitScaleSave()
   }
 
   menuBtn.addEventListener('click', (e) => {
@@ -798,23 +812,28 @@
     // Lock interactive mode during drag
     window.electronAPI.setIgnoreMouseEvents(false)
 
-    const initialBounds = await window.electronAPI.getWindowBounds()
+    const currentBounds = await window.electronAPI.getWindowBounds()
     const workArea = await window.electronAPI.getWorkArea()
+    // The window may still be at the menu-fit size from the last menu
+    // session; tighten it to the current whale scale before dragging
+    // (bottom-right corner kept fixed so nothing visibly jumps), so the
+    // drag clamp and corner snap behave correctly.
+    const tightBounds = (await flushWindowResize(undefined, currentBounds, workArea)) || currentBounds
 
     drag = {
       active: true,
       startX: e.screenX,
       startY: e.screenY,
-      origX: initialBounds.x,
-      origY: initialBounds.y,
-      width: initialBounds.width,
-      height: initialBounds.height,
+      origX: tightBounds.x,
+      origY: tightBounds.y,
+      width: tightBounds.width,
+      height: tightBounds.height,
       moved: false,
       workArea,
     }
 
-    pendingX = initialBounds.x
-    pendingY = initialBounds.y
+    pendingX = tightBounds.x
+    pendingY = tightBounds.y
 
     root.classList.add('dshwv-dragging')
     pressDown()
