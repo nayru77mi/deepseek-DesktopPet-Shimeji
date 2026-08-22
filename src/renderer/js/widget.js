@@ -521,19 +521,93 @@
     return Math.round(((s - MIN_SCALE) / ((MAX_SCALE - MIN_SCALE) / 19))) + 1
   }
 
-  async function applyScale(v, save = true) {
+  // -------------------------------------------------------------
+  // Scale slider: apply CSS instantly, resize the OS window lazily.
+  // Resizing a transparent layered window on Windows reallocates the
+  // DWM compositor surface (see BUG-001), so per-input-event resizes
+  // cause visible flicker. While the user drags (menu open) the window
+  // is FROZEN — only the CSS scale changes — and it is resized exactly
+  // once on release. External config changes (menu closed) still resize
+  // through a short debounce.
+  // -------------------------------------------------------------
+  let scaleResizeTimer = null
+  let scaleResizeSeq = 0
+
+  function scheduleResize() {
+    scaleResizeSeq++
+    const seq = scaleResizeSeq
+    if (scaleResizeTimer) clearTimeout(scaleResizeTimer)
+    scaleResizeTimer = setTimeout(() => {
+      scaleResizeTimer = null
+      if (seq === scaleResizeSeq) flushWindowResize(seq)
+    }, 150)
+  }
+
+  // Anchor the open menu to the whale's bottom-right corner at a FIXED
+  // pixel offset (instead of a percentage of the whale height). While the
+  // window is frozen during a scale drag, the menu therefore stays exactly
+  // stationary under the cursor instead of shifting up/down with the whale.
+  function anchorMenuToWindow() {
+    const rootH = root.offsetHeight || Math.round(180 * state.scale)
+    menuBox.style.bottom = Math.round(0.5945 * rootH + 10) + 'px'
+    if (state.h === 'left') {
+      menuBox.style.right = 'auto'
+      menuBox.style.left = '11px'
+    } else {
+      menuBox.style.left = 'auto'
+      menuBox.style.right = '11px'
+    }
+  }
+
+  function applyScale(v, save = true) {
     const next = Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(v))) * 10) / 10
     state.scale = next
     root.style.setProperty('--dshw-scale', String(next))
     scaleInput.value = String(next)
     scaleNumber.value = String(scaleToDisplay(next))
 
-    const basePx = Math.round(180 * next)
-    const winWidth = basePx + 180
-    const winHeight = basePx + 200
+    if (save) {
+      // Slider released: re-anchor the menu to the new whale size first,
+      // then resize the window once (menu-fit math uses the fresh anchor),
+      // and persist.
+      if (scaleResizeTimer) {
+        clearTimeout(scaleResizeTimer)
+        scaleResizeTimer = null
+      }
+      scaleResizeSeq++
+      anchorMenuToWindow()
+      flushWindowResize(scaleResizeSeq)
+      saveConfig()
+    } else if (!menuOpen) {
+      // External config change (menu closed): resize once, debounced.
+      scheduleResize()
+    }
+    // While dragging (menu open): the window stays frozen — only the CSS
+    // scale changes, so the whale scales in place with zero window churn
+    // (no DWM surface rebuilds, no flicker, no menu movement).
+  }
+
+  // Minimum window height needed to show the whole hamburger menu.
+  // The menu is a child of .dshwv-root and opens upward from the whale, so
+  // when the whale (and window) get small the menu top overflows the window
+  // and the OS clips its first rows (the size slider). offsetTop/offsetHeight
+  // read untransformed layout, so the open/close scale animation is ignored.
+  function menuNeededWindowHeight() {
+    const rootH = root.offsetHeight || Math.round(180 * state.scale)
+    return Math.ceil(rootH + 25 - menuBox.offsetTop)
+  }
+
+  async function flushWindowResize(seq) {
+    const basePx = Math.round(180 * state.scale)
+    let winWidth = basePx + 180
+    let winHeight = basePx + 200
+    // While the menu is open, never shrink the window below the menu size,
+    // otherwise its top rows (e.g. the size slider) get clipped again.
+    if (menuOpen) winHeight = Math.max(winHeight, menuNeededWindowHeight())
 
     const currentBounds = await window.electronAPI.getWindowBounds()
     const workArea = await window.electronAPI.getWorkArea()
+    if (seq !== undefined && seq !== scaleResizeSeq) return // stale flush
 
     let newX = currentBounds.x
     let newY = currentBounds.y
@@ -542,12 +616,18 @@
       newX = workArea.x + workArea.width - winWidth
     } else if (state.h === 'left') {
       newX = workArea.x
+    } else if (currentBounds.width !== winWidth) {
+      // Free position: keep the whale's bottom-right corner fixed
+      // (the whale is anchored bottom-right inside the window).
+      newX = currentBounds.x + (currentBounds.width - winWidth)
     }
 
     if (state.v === 'bottom') {
       newY = workArea.y + workArea.height - winHeight
     } else if (state.v === 'top') {
       newY = workArea.y
+    } else if (currentBounds.height !== winHeight) {
+      newY = currentBounds.y + (currentBounds.height - winHeight)
     }
 
     newX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - winWidth, newX))
@@ -559,8 +639,23 @@
       width: winWidth,
       height: winHeight,
     })
+  }
 
-    if (save) saveConfig()
+  // When the menu opens, grow the window upward if the current (possibly
+  // small) window height would clip the menu; keep the whale on screen.
+  async function fitWindowForMenu() {
+    const bounds = await window.electronAPI.getWindowBounds()
+    const needed = menuNeededWindowHeight()
+    if (bounds.height >= needed) return
+    const grow = needed - bounds.height
+    const workArea = await window.electronAPI.getWorkArea()
+    const newY = Math.max(workArea.y - 5, bounds.y - grow)
+    window.electronAPI.setWindowBounds({
+      x: bounds.x,
+      y: newY,
+      width: bounds.width,
+      height: bounds.height + grow,
+    })
   }
 
   function applyVol(v, save = true) {
@@ -636,6 +731,11 @@
     menuBtn.classList.toggle('dshwv-menu-btn-visible', menuOpen)
     if (menuOpen) {
       window.electronAPI.setIgnoreMouseEvents(false)
+      anchorMenuToWindow()
+      fitWindowForMenu()
+    } else {
+      // Restore the scale-based window size now that the menu is closed.
+      flushWindowResize()
     }
   }
 
@@ -644,6 +744,7 @@
     menuOpen = false
     menuBox.classList.remove('dshwv-menu-open')
     menuBtn.classList.remove('dshwv-menu-btn-visible')
+    flushWindowResize()
   }
 
   menuBtn.addEventListener('click', (e) => {
@@ -651,7 +752,8 @@
     toggleMenu()
   })
 
-  scaleInput.addEventListener('input', () => applyScale(scaleInput.value, true))
+  scaleInput.addEventListener('input', () => applyScale(scaleInput.value, false))
+  scaleInput.addEventListener('change', () => applyScale(scaleInput.value, true))
   scaleNumber.addEventListener('change', () => {
     const v = Math.round(Number(scaleNumber.value))
     const s = MIN_SCALE + (Math.max(1, Math.min(20, v)) - 1) * (MAX_SCALE - MIN_SCALE) / 19
