@@ -29,46 +29,51 @@
 
 ## 🚀 快速启动与安装
 
-### 方式 A：直接运行打包好的桌面端（推荐）
+### 方式 A：直接下载桌面安装包（推荐普通用户）
 
-| 版本 | 文件路径 | 特点 |
+前往本项目 GitHub **[Releases 发布页](https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet/releases)** 下载最新版预编译文件：
+
+| 版本类型 | 文件名称示例 | 特点说明 |
 | :--- | :--- | :--- |
-| **标准安装包** | `dist/DeepSeek余额小鲸鱼 Setup 1.0.0.exe` | 双击运行安装向导，自动生成桌面与开始菜单小鲸鱼图标快捷方式，支持卸载 |
-| **绿色便携版** | `dist/DeepSeek余额小鲸鱼 1.0.0.exe` | **无需安装**，直接双击运行，适合放 U 盘或快速体验 |
-
-> 💡 **分发提示**：如果要发给别人使用，**只需发送 `Setup.exe` 或便携版 `.exe`** 即可。
-
-### 方式 B：开发者源码运行
-
-```powershell
-# 1. 安装依赖
-pnpm install
-
-# 2. 启动桌宠
-pnpm start
-```
-
-### 3. 配置 DeepSeek API 密钥
-1. 启动后，右键屏幕右下角系统托盘小鲸鱼图标，或点击桌宠右上角汉堡菜单底部的 **「⚙️ 凭据与高级设置」**；
-2. 填入你的 `DEEPSEEK_API_KEY`（形如 `sk-...`）；
-3. 点击 **「测试拉取余额」** 验证无误后，点击 **「保存配置」** 即可！
+| **标准安装包（推荐）** | `DeepSeek余额小鲸鱼 Setup 1.0.0.exe` | 运行安装向导，自动生成带小鲸鱼高清图标的桌面与开始菜单快捷方式，支持完整卸载 |
+| **绿色单文件便携版** | `DeepSeek余额小鲸鱼 1.0.0.exe` | **无需安装**，直接双击运行，适合放 U 盘或快速体验 |
 
 ---
 
-## 🔨 打包 EXE 与生成桌面快捷方式
+### 方式 B：从源码运行与本地构建（适合开发者）
 
-本项目已配置完整的 `electron-builder` 构建流与快捷方式生成脚本：
+#### 1. 环境准备
+- [Node.js](https://nodejs.org/) (建议 `>= 18.0.0`)
+- [pnpm](https://pnpm.io/) (包管理器)
 
+#### 2. 克隆与启动
 ```powershell
-# 1. 重新打包 Windows EXE（输出到 dist/ 目录）
+# 1. 克隆代码仓库
+git clone https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet.git
+cd deepseek-Whale-Girl-Desk-Pet
+
+# 2. 安装项目依赖
+pnpm install
+
+# 3. 启动开发环境桌宠
+pnpm start
+```
+
+#### 3. 本地打包构建 EXE
+```powershell
+# 重新打包 Windows 安装包与便携版（产物输出至 dist/ 目录）
 pnpm run build:win
 
-# 2. 仅打包解压即用目录（调试用）
+# 仅打包解压即用目录（免封装调试）
 pnpm run build:dir
-
-# 3. 重新为当前用户桌面生成带小鲸鱼专属图标的快捷方式
-python scripts/create-shortcut.py
 ```
+
+---
+
+### 3. 配置 DeepSeek API 密钥
+1. 启动桌宠后，右键屏幕右下角系统托盘小鲸鱼图标，或点击桌宠右上角汉堡菜单底部的 **「⚙️ 凭据与高级设置」**；
+2. 填入你的 `DEEPSEEK_API_KEY`（形如 `sk-...`）；
+3. 点击 **「测试拉取余额」** 验证无误后，点击 **「保存配置」** 即可！
 
 ---
 
