@@ -1,6 +1,6 @@
 {
   "name": "deepseek-whale-girl-desk-pet",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "DeepSeek 余额小鲸鱼桌面宠物挂件（含今日已用、峰谷定价、随机台词、音效、每轮消耗统计与系统托盘）",
   "main": "src/main/index.js",
   "type": "commonjs",

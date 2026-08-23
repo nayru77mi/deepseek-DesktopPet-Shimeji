@@ -266,4 +266,4 @@ BUG-007 后拖动全程已丝滑，但在**松开大小滑块的瞬间**仍会�
 ---
 
 *日志维护：DeepSeek Whale Girl Desk Pet 开发组*  
-*最新版本：v1.0.0 (Stable)*
+*最新版本：v1.1.0 (Stable)*
