@@ -31,6 +31,8 @@
   const usageSelect = document.getElementById('usage-select')
   const peakSelect = document.getElementById('peak-select')
   const bubbleToggle = document.getElementById('bubble-toggle')
+  const snapInput = document.getElementById('snap-range')
+  const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
   const turnCostCloseInput = document.getElementById('turn-cost-close')
   const openSettingsBtn = document.getElementById('open-settings-btn')
@@ -68,6 +70,7 @@
   let usageMode = 'ledger'
   let peakMode = 'default'
   let bubbleOn = true
+  let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
 
@@ -514,6 +517,7 @@
         bubbleOn: bubbleOn,
         turnCostOn: turnCostOn,
         turnCostCloseMs: turnCostCloseMs,
+        snapThreshold: snapThreshold,
       })
     } catch (err) {}
   }
@@ -722,6 +726,14 @@
     if (save) saveConfig()
   }
 
+  function applySnapThreshold(v, save = true) {
+    const next = Math.max(0, Math.min(200, Math.round(Number(v) || 0)))
+    snapThreshold = next
+    if (snapInput) snapInput.value = String(next)
+    if (snapVal) snapVal.textContent = next === 0 ? '关闭' : `${next}px`
+    if (save) saveConfig()
+  }
+
   function applyTurnCostOn(v, save = true) {
     turnCostOn = !!v
     turnCostToggle.checked = turnCostOn
@@ -904,6 +916,12 @@
   usageSelect.addEventListener('change', () => applyUsageMode(usageSelect.value, true))
   peakSelect.addEventListener('change', () => applyPeakMode(peakSelect.value, true))
   bubbleToggle.addEventListener('change', () => applyBubbleOn(bubbleToggle.checked, true))
+  snapInput.addEventListener('input', () => {
+    const v = Math.round(Number(snapInput.value) || 0)
+    snapThreshold = v
+    if (snapVal) snapVal.textContent = v === 0 ? '关闭' : `${v}px`
+  })
+  snapInput.addEventListener('change', () => applySnapThreshold(snapInput.value, true))
   turnCostToggle.addEventListener('change', () => applyTurnCostOn(turnCostToggle.checked, true))
   turnCostCloseInput.addEventListener('change', () => applyTurnCostClose(turnCostCloseInput.value, true))
   openSettingsBtn.addEventListener('click', () => {
@@ -1031,33 +1049,35 @@
       return
     }
 
-    // Snap Check based on workArea quarters
-    const centerX = pendingX + width / 2
-    const centerY = pendingY + height / 2
+    // Snap Check based on distance to screen edges
+    const distanceLeft = pendingX - workArea.x
+    const distanceRight = (workArea.x + workArea.width) - (pendingX + width)
+    const distanceTop = pendingY - workArea.y
+    const distanceBottom = (workArea.y + workArea.height) - (pendingY + height)
 
     let targetX = pendingX
     let targetY = pendingY
 
-    if (centerX < workArea.x + workArea.width / 4) {
+    if (snapThreshold > 0 && distanceLeft <= snapThreshold && distanceLeft >= -50) {
       state.h = 'left'
       targetX = workArea.x
-    } else if (centerX > workArea.x + (workArea.width * 3) / 4) {
+    } else if (snapThreshold > 0 && distanceRight <= snapThreshold && distanceRight >= -50) {
       state.h = 'right'
       targetX = workArea.x + workArea.width - width
     } else {
       state.h = null
-      targetX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, targetX))
+      targetX = pendingX
     }
 
-    if (centerY < workArea.y + workArea.height / 4) {
+    if (snapThreshold > 0 && distanceTop <= snapThreshold && distanceTop >= -50) {
       state.v = 'top'
       targetY = workArea.y
-    } else if (centerY > workArea.y + (workArea.height * 3) / 4) {
+    } else if (snapThreshold > 0 && distanceBottom <= snapThreshold && distanceBottom >= -50) {
       state.v = 'bottom'
       targetY = workArea.y + workArea.height - height
     } else {
       state.v = null
-      targetY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, targetY))
+      targetY = pendingY
     }
 
     // Final safety clamp
@@ -1111,6 +1131,7 @@
       bubbleOn = cfg.bubbleOn !== false
       turnCostOn = cfg.turnCostOn !== false
       turnCostCloseMs = typeof cfg.turnCostCloseMs === 'number' ? cfg.turnCostCloseMs : 5000
+      snapThreshold = typeof cfg.snapThreshold === 'number' ? cfg.snapThreshold : 60
 
       if (cfg.windowPos && cfg.windowPos.h) {
         state.h = cfg.windowPos.h
@@ -1126,6 +1147,8 @@
       usageSelect.value = usageMode
       peakSelect.value = peakMode
       bubbleToggle.checked = bubbleOn
+      if (snapInput) snapInput.value = String(snapThreshold)
+      if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
       turnCostCloseInput.value = String(Math.round(turnCostCloseMs / 1000))
     }
@@ -1177,6 +1200,9 @@
       }
       if (newCfg.bubbleOn !== undefined) {
         applyBubbleOn(newCfg.bubbleOn, false)
+      }
+      if (newCfg.snapThreshold !== undefined) {
+        applySnapThreshold(newCfg.snapThreshold, false)
       }
       if (newCfg.turnCostOn !== undefined) {
         applyTurnCostOn(newCfg.turnCostOn, false)

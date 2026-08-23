@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
   bubbleOn: true,
   turnCostOn: true,
   turnCostCloseMs: 5000,
+  snapThreshold: 60,
   apiKey: process.env.DEEPSEEK_API_KEY || '',
   platformToken: process.env.DEEPSEEK_PLATFORM_TOKEN || '',
   alwaysOnTop: true,
