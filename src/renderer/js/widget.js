@@ -19,6 +19,7 @@
   const gifEl = document.getElementById('whale-gif')
   const menuBtn = document.getElementById('menu-btn')
   const menuBox = document.getElementById('menu-box')
+  const menuHeader = document.getElementById('menu-header')
   const appContainer = document.getElementById('app-container')
 
   // Menu Inputs
@@ -562,6 +563,16 @@
     saveConfig()
   }
 
+  let menuOffset = { x: 0, y: 0 }
+  let menuDrag = null
+  let menuDragRafId = null
+
+  function resetMenuOffset() {
+    menuOffset = { x: 0, y: 0 }
+    menuBox.style.setProperty('--menu-dx', '0px')
+    menuBox.style.setProperty('--menu-dy', '0px')
+  }
+
   // Anchor the open menu to the whale's bottom-right corner at a FIXED
   // pixel offset (instead of a percentage of the whale height). While the
   // window is frozen during a scale drag, the menu therefore stays exactly
@@ -576,6 +587,7 @@
       menuBox.style.left = 'auto'
       menuBox.style.right = '11px'
     }
+    resetMenuOffset()
   }
 
   function applyScale(v, save = true) {
@@ -740,12 +752,16 @@
   let menuOpen = false
   function toggleMenu() {
     menuOpen = !menuOpen
+    if (menuOpen) {
+      anchorMenuToWindow()
+    }
     menuBox.classList.toggle('dshwv-menu-open', menuOpen)
     menuBtn.classList.toggle('dshwv-menu-btn-visible', menuOpen)
     if (menuOpen) {
       window.electronAPI.setIgnoreMouseEvents(false)
-      anchorMenuToWindow()
       fitWindowForMenu()
+    } else {
+      resetMenuOffset()
     }
     // On close the window keeps its current size — it is tightened to the
     // whale scale at the next whale drag — so closing the menu can never
@@ -757,9 +773,119 @@
     menuOpen = false
     menuBox.classList.remove('dshwv-menu-open')
     menuBtn.classList.remove('dshwv-menu-btn-visible')
+    resetMenuOffset()
     // Commit the scale change (deferred from slider release) on menu close.
     commitScaleSave()
   }
+
+  // -------------------------------------------------------------
+  // Menu Dragging Implementation (Free drag with window bounds clamp)
+  // -------------------------------------------------------------
+  function onMenuDragStart(e) {
+    if (e.button !== 0) return
+    if (!menuOpen) return
+
+    // Ignore interactive controls inside the menu
+    const target = e.target
+    if (target.closest('input, select, button, a, label, .dshwv-range, .dshwv-sound, .dshwv-number, .dshwv-check, .dshwv-settings-btn')) {
+      return
+    }
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const menuRect = menuBox.getBoundingClientRect()
+    const containerW = window.innerWidth
+    const containerH = window.innerHeight
+
+    menuDrag = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      origDx: menuOffset.x,
+      origDy: menuOffset.y,
+      baseLeft: menuRect.left - menuOffset.x,
+      baseTop: menuRect.top - menuOffset.y,
+      width: menuRect.width,
+      height: menuRect.height,
+      containerW,
+      containerH,
+      moved: false,
+    }
+
+    menuBox.classList.add('dshwv-menu-dragging')
+
+    window.addEventListener('mousemove', onMenuDragMove, { capture: true, passive: false })
+    window.addEventListener('mouseup', onMenuDragEnd, { capture: true, passive: false })
+  }
+
+  function onMenuDragMove(e) {
+    if (!menuDrag || !menuDrag.active) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const rawDx = e.clientX - menuDrag.startX
+    const rawDy = e.clientY - menuDrag.startY
+
+    if (rawDx * rawDx + rawDy * rawDy >= 4) {
+      menuDrag.moved = true
+    }
+
+    let targetDx = menuDrag.origDx + rawDx
+    let targetDy = menuDrag.origDy + rawDy
+
+    // Clamp within window bounds so menu cannot be dragged out of visible area
+    const minDx = -menuDrag.baseLeft + 6
+    const maxDx = menuDrag.containerW - menuDrag.baseLeft - menuDrag.width - 6
+    const minDy = -menuDrag.baseTop + 6
+    const maxDy = menuDrag.containerH - menuDrag.baseTop - menuDrag.height - 6
+
+    if (minDx <= maxDx) {
+      targetDx = Math.max(minDx, Math.min(maxDx, targetDx))
+    }
+    if (minDy <= maxDy) {
+      targetDy = Math.max(minDy, Math.min(maxDy, targetDy))
+    }
+
+    menuOffset.x = targetDx
+    menuOffset.y = targetDy
+
+    if (!menuDragRafId) {
+      menuDragRafId = requestAnimationFrame(() => {
+        menuDragRafId = null
+        if (menuDrag && menuDrag.active) {
+          menuBox.style.setProperty('--menu-dx', `${menuOffset.x}px`)
+          menuBox.style.setProperty('--menu-dy', `${menuOffset.y}px`)
+        }
+      })
+    }
+  }
+
+  function onMenuDragEnd(e) {
+    if (!menuDrag || !menuDrag.active) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    window.removeEventListener('mousemove', onMenuDragMove, { capture: true })
+    window.removeEventListener('mouseup', onMenuDragEnd, { capture: true })
+
+    if (menuDragRafId) {
+      cancelAnimationFrame(menuDragRafId)
+      menuDragRafId = null
+    }
+
+    menuBox.classList.remove('dshwv-menu-dragging')
+    menuBox.style.setProperty('--menu-dx', `${menuOffset.x}px`)
+    menuBox.style.setProperty('--menu-dy', `${menuOffset.y}px`)
+
+    menuDrag.active = false
+    menuDrag = null
+  }
+
+  if (menuHeader) {
+    menuHeader.addEventListener('mousedown', onMenuDragStart)
+  }
+  menuBox.addEventListener('mousedown', onMenuDragStart)
 
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation()
@@ -966,7 +1092,7 @@
   })
 
   appContainer.addEventListener('mouseleave', () => {
-    if (!menuOpen && (!drag || !drag.active)) {
+    if (!menuOpen && (!drag || !drag.active) && (!menuDrag || !menuDrag.active)) {
       window.electronAPI.setIgnoreMouseEvents(true, { forward: true })
       menuBtn.classList.remove('dshwv-menu-btn-visible')
     }

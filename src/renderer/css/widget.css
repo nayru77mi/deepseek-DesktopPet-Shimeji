@@ -266,9 +266,11 @@ html, body {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(32, 49, 112, .35);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 8px 12px 10px;
   opacity: 0;
-  transform: scale(.92) translateY(4px);
+  --menu-dx: 0px;
+  --menu-dy: 0px;
+  transform: translate(var(--menu-dx, 0px), var(--menu-dy, 0px)) scale(.92) translateY(4px);
   transform-origin: bottom right;
   transition: opacity .18s ease, transform .2s cubic-bezier(.34, 1.56, .64, 1);
   pointer-events: none;
@@ -277,21 +279,61 @@ html, body {
   color-scheme: light;
 }
 
+.dshwv-menu.dshwv-menu-dragging {
+  transition: none !important;
+}
+
 .dshwv-root.dshwv-left .dshwv-menu {
-  transform: scaleX(-1) scale(.92) translateY(4px);
+  transform: scaleX(-1) translate(var(--menu-dx, 0px), var(--menu-dy, 0px)) scale(.92) translateY(4px);
   transform-origin: bottom left;
   right: auto;
   left: 4px;
 }
 
 .dshwv-root.dshwv-left .dshwv-menu.dshwv-menu-open {
-  transform: scaleX(-1) scale(1) translateY(0);
+  transform: scaleX(-1) translate(var(--menu-dx, 0px), var(--menu-dy, 0px)) scale(1) translateY(0);
 }
 
 .dshwv-menu.dshwv-menu-open {
   opacity: 1;
-  transform: scale(1) translateY(0);
+  transform: translate(var(--menu-dx, 0px), var(--menu-dy, 0px)) scale(1) translateY(0);
   pointer-events: auto;
+}
+
+.dshwv-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed rgba(32, 49, 112, 0.2);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.dshwv-menu.dshwv-menu-dragging .dshwv-menu-header {
+  cursor: grabbing;
+}
+
+.dshwv-menu-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #203170;
+  letter-spacing: 0.04em;
+}
+
+.dshwv-menu-drag-handle {
+  font-size: 13px;
+  font-weight: bold;
+  color: rgba(32, 49, 112, 0.45);
+  line-height: 1;
+  letter-spacing: -1px;
+  transition: color 0.15s ease;
+}
+
+.dshwv-menu-header:hover .dshwv-menu-drag-handle {
+  color: rgba(32, 49, 112, 0.85);
 }
 
 .dshwv-menu-row {
