@@ -35,6 +35,7 @@
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
   const turnCostCloseInput = document.getElementById('turn-cost-close')
+  const openChatBtn = document.getElementById('open-chat-btn')
   const openSettingsBtn = document.getElementById('open-settings-btn')
 
   let state = {
@@ -924,6 +925,12 @@
   snapInput.addEventListener('change', () => applySnapThreshold(snapInput.value, true))
   turnCostToggle.addEventListener('change', () => applyTurnCostOn(turnCostToggle.checked, true))
   turnCostCloseInput.addEventListener('change', () => applyTurnCostClose(turnCostCloseInput.value, true))
+  if (openChatBtn) {
+    openChatBtn.addEventListener('click', () => {
+      closeMenu()
+      window.electronAPI.openExternal('https://chat.deepseek.com/')
+    })
+  }
   openSettingsBtn.addEventListener('click', () => {
     closeMenu()
     window.electronAPI.openSettings()

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWindowBounds: () => ipcRenderer.invoke('get-window-bounds'),
   getWorkArea: () => ipcRenderer.invoke('get-work-area'),
   openSettings: () => ipcRenderer.send('open-settings'),
+  openExternal: (url) => ipcRenderer.send('open-external', url),
   closeApp: () => ipcRenderer.send('close-app'),
   testCost: (amount) => ipcRenderer.invoke('test-cost', amount),
 })

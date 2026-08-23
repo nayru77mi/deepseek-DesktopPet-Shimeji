@@ -410,9 +410,17 @@ html, body {
   padding: 5px 0;
   cursor: pointer;
   font-weight: 500;
-  transition: background .15s ease;
+  transition: background .15s ease, transform .1s ease;
 }
 
 .dshwv-settings-btn:hover {
   background: #14204d;
+}
+
+.dshwv-chat-btn {
+  background: #2b3f8f;
+}
+
+.dshwv-chat-btn:hover {
+  background: #192660;
 }

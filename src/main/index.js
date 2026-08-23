@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, shell } = require('electron')
 const path = require('node:path')
 const { readConfig, writeConfig } = require('./store')
 const { getBalance, clearBalanceCache } = require('./balance-service')
@@ -301,6 +301,14 @@ ipcMain.handle('get-work-area', (event) => {
 
 ipcMain.on('open-settings', () => {
   createSettingsWindow()
+})
+
+ipcMain.on('open-external', (event, url) => {
+  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+    shell.openExternal(url).catch((err) => {
+      console.error('Failed to open external url:', err)
+    })
+  }
 })
 
 ipcMain.on('close-app', () => {
