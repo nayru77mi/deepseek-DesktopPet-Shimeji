@@ -7,6 +7,9 @@
   const btnTestCost = document.getElementById('btn-test-cost')
   const chkAlwaysOnTop = document.getElementById('chk-always-on-top')
   const chkOpenAtLogin = document.getElementById('chk-open-at-login')
+  const chkDailyUsageAlert = document.getElementById('chk-daily-usage-alert')
+  const inputDailyUsageLimit = document.getElementById('input-daily-usage-limit')
+  const btnTestAlert = document.getElementById('btn-test-alert')
   const inputListenerPort = document.getElementById('input-listener-port')
   const btnCancel = document.getElementById('btn-cancel')
   const btnSave = document.getElementById('btn-save')
@@ -34,6 +37,8 @@
       inputPlatformToken.value = config.platformToken || ''
       chkAlwaysOnTop.checked = config.alwaysOnTop !== false
       chkOpenAtLogin.checked = !!config.openAtLogin
+      chkDailyUsageAlert.checked = config.dailyUsageAlertOn !== false
+      inputDailyUsageLimit.value = typeof config.dailyUsageLimit === 'number' ? config.dailyUsageLimit : 300
       inputListenerPort.value = config.listenerPort || 37189
     }
   } catch (err) {
@@ -74,6 +79,17 @@
     }
   })
 
+  // Test Usage Alert Bubble
+  btnTestAlert.addEventListener('click', async () => {
+    try {
+      const limit = Number(inputDailyUsageLimit.value) || 300
+      await window.electronAPI.testUsageAlert(limit + 5.5)
+      showToast(`⚠️ 已向桌宠触发超额预警测试: ¥${(limit + 5.5).toFixed(2)}`)
+    } catch (err) {
+      alert(`测试失败: ${err && err.message}`)
+    }
+  })
+
   // Save Config
   btnSave.addEventListener('click', async () => {
     btnSave.disabled = true
@@ -84,6 +100,8 @@
         platformToken: inputPlatformToken.value.trim(),
         alwaysOnTop: chkAlwaysOnTop.checked,
         openAtLogin: chkOpenAtLogin.checked,
+        dailyUsageAlertOn: chkDailyUsageAlert.checked,
+        dailyUsageLimit: Number(inputDailyUsageLimit.value) || 300,
         listenerPort: port,
       })
 

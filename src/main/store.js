@@ -34,6 +34,8 @@ const DEFAULT_CONFIG = {
   alwaysOnTop: true,
   listenerPort: 37189,
   openAtLogin: false,
+  dailyUsageAlertOn: true,
+  dailyUsageLimit: 300,
   windowPos: null,
 }
 

@@ -24,4 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.send('open-external', url),
   closeApp: () => ipcRenderer.send('close-app'),
   testCost: (amount) => ipcRenderer.invoke('test-cost', amount),
+  testUsageAlert: (amount) => ipcRenderer.invoke('test-usage-alert', amount),
+  onUsageAlert: (callback) => {
+    const handler = (event, data) => callback(data)
+    ipcRenderer.on('trigger-usage-alert', handler)
+    return () => ipcRenderer.removeListener('trigger-usage-alert', handler)
+  },
 })

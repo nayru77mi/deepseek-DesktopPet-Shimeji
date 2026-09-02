@@ -213,6 +213,22 @@
         </label>
       </div>
 
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="checkbox-row">
+          <input id="chk-daily-usage-alert" type="checkbox" checked>
+          <span>单日用量超额预警 (超过阈值萌系弹窗提醒)</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top: 10px;">
+        <label for="input-daily-usage-limit">单日用量预警阈值 (元)</label>
+        <div class="input-row">
+          <input id="input-daily-usage-limit" type="number" min="1" step="10" value="300" style="max-width: 120px;">
+          <button id="btn-test-alert" type="button" class="btn-sm">测试超额预警气泡</button>
+        </div>
+        <div class="help-text">当单日用量（记账/令牌）超过该金额时，自动弹出“主人歇歇吧！要..要被玩坏了...”提示。</div>
+      </div>
+
       <div class="form-group" style="margin-top: 12px;">
         <label for="input-listener-port">每轮消耗统计本地监听端口</label>
         <div class="input-row">

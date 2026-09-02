@@ -34,6 +34,7 @@
   const snapInput = document.getElementById('snap-range')
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
+  const dailyAlertToggle = document.getElementById('daily-alert-toggle')
   const turnCostCloseInput = document.getElementById('turn-cost-close')
   const openChatBtn = document.getElementById('open-chat-btn')
   const openSettingsBtn = document.getElementById('open-settings-btn')
@@ -62,6 +63,9 @@
   let bubbleRandomLines = null
   let costBubbleActive = false
   let costBubbleTimer = null
+  let usageAlertBubbleActive = false
+  let usageAlertTimer = null
+  let lastAlertDate = null
   let lastCostSeq = 0
   let lastCostAligned = false
 
@@ -74,6 +78,13 @@
   let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
+  let dailyUsageAlertOn = true
+  let dailyUsageLimit = 300
+
+  function getTodayString() {
+    const now = new Date(Date.now() + 8 * 3600 * 1000)
+    return now.toISOString().slice(0, 10)
+  }
 
   const BUBBLE_STYLE_CLASS = {
     A: 'dshwv-label',
@@ -272,7 +283,7 @@
 
   function showBubble() {
     if (!bubbleOn) return
-    if (costBubbleActive) return
+    if (costBubbleActive || usageAlertBubbleActive) return
     if (bubbleTimer) {
       clearTimeout(bubbleTimer)
       bubbleTimer = null
@@ -317,6 +328,7 @@
 
   function showCostBubble(amount) {
     if (!bubbleOn || !turnCostOn) return
+    if (usageAlertBubbleActive) return
     if (costBubbleTimer) {
       clearTimeout(costBubbleTimer)
       costBubbleTimer = null
@@ -365,9 +377,77 @@
     hideBubble()
   }
 
+  function showUsageAlertBubble(amount, isTest = false) {
+    if (!isTest && (!bubbleOn || !dailyUsageAlertOn)) return
+    if (usageAlertTimer) {
+      clearTimeout(usageAlertTimer)
+      usageAlertTimer = null
+    }
+    if (costBubbleTimer) {
+      clearTimeout(costBubbleTimer)
+      costBubbleTimer = null
+    }
+    if (bubbleTimer) {
+      clearTimeout(bubbleTimer)
+      bubbleTimer = null
+    }
+    if (gifFadeTimer) {
+      clearTimeout(gifFadeTimer)
+      gifFadeTimer = null
+    }
+    usageAlertBubbleActive = true
+    costBubbleActive = false
+    bubbleRandomActive = false
+    bubbleShown = true
+    lastHintText = null
+
+    gifEl.style.display = 'none'
+    gifEl.style.opacity = ''
+    labelEl.style.display = ''
+    labelEl.className = 'dshwv-label'
+    labelEl.textContent = '⚠️ 单日用量预警'
+    labelEl.style.color = '#e0433f'
+
+    amountEl.style.display = ''
+    amountEl.className = 'dshwv-label dshwv-wrap'
+    amountEl.textContent = '主人歇歇吧！要..要被玩坏了...'
+    amountEl.style.color = '#203170'
+
+    hintEl.style.display = ''
+    hintEl.className = 'dshwv-hint'
+    hintEl.textContent = '今日已用 ' + fmt(amount, state.currency) + ' · 点击关闭'
+    hintEl.style.color = '#8c9ac2'
+
+    textBox.style.transition = ''
+    textBox.style.opacity = ''
+    bubbleBox.classList.add('dshwv-bubble-open')
+
+    // Q弹惊慌手感反馈
+    pressDown()
+    setTimeout(pressUp, 220)
+
+    const closeMs = turnCostCloseMs > 0 ? Math.max(7000, turnCostCloseMs) : 0
+    if (closeMs > 0) {
+      usageAlertTimer = setTimeout(hideUsageAlertBubble, closeMs)
+    }
+  }
+
+  function hideUsageAlertBubble() {
+    if (usageAlertTimer) {
+      clearTimeout(usageAlertTimer)
+      usageAlertTimer = null
+    }
+    usageAlertBubbleActive = false
+    hideBubble()
+  }
+
   bubbleBox.addEventListener('click', (e) => {
     e.stopPropagation()
     if (!bubbleShown) return
+    if (usageAlertBubbleActive) {
+      hideUsageAlertBubble()
+      return
+    }
     if (costBubbleActive) {
       hideCostBubble()
       return
@@ -390,7 +470,7 @@
   }
 
   function animateAmount(from, to, currency, duration) {
-    if (costBubbleActive) return
+    if (costBubbleActive || usageAlertBubbleActive) return
     if (animId) cancelAnimationFrame(animId)
     if (from === null || !isFinite(from)) from = to
     if (from === to) {
@@ -417,7 +497,7 @@
   }
 
   function render() {
-    if (costBubbleActive) return
+    if (costBubbleActive || usageAlertBubbleActive) return
     let amount, hint
     if (state.status === 'error') {
       amount = shown !== null ? fmt(shown, state.currency) : '--'
@@ -466,6 +546,7 @@
         state.message = ''
         state.todayUsage = data.todayUsage !== undefined ? data.todayUsage : null
         state.isPeak = !!data.isPeak
+        checkDailyUsageAlert(state.todayUsage)
 
         if (changed && !currencyChanged) {
           if (!manual) {
@@ -506,6 +587,19 @@
     }
   }
 
+  function checkDailyUsageAlert(usage) {
+    if (!dailyUsageAlertOn) return
+    const num = Number(usage)
+    if (!isFinite(num)) return
+    if (num < dailyUsageLimit) return
+
+    const today = getTodayString()
+    if (lastAlertDate === today) return
+
+    lastAlertDate = today
+    showUsageAlertBubble(num, false)
+  }
+
   function saveConfig() {
     try {
       window.electronAPI.saveConfig({
@@ -519,6 +613,8 @@
         turnCostOn: turnCostOn,
         turnCostCloseMs: turnCostCloseMs,
         snapThreshold: snapThreshold,
+        dailyUsageAlertOn: dailyUsageAlertOn,
+        dailyUsageLimit: dailyUsageLimit,
       })
     } catch (err) {}
   }
@@ -749,6 +845,19 @@
     if (save) saveConfig()
   }
 
+  function applyDailyUsageAlertOn(v, save = true) {
+    dailyUsageAlertOn = !!v
+    if (dailyAlertToggle) dailyAlertToggle.checked = dailyUsageAlertOn
+    if (!dailyUsageAlertOn && usageAlertBubbleActive) hideUsageAlertBubble()
+    if (save) saveConfig()
+  }
+
+  function applyDailyUsageLimit(v, save = true) {
+    const n = Math.max(1, Math.round(Number(v) || 300))
+    dailyUsageLimit = n
+    if (save) saveConfig()
+  }
+
   // SQUISH & Press Interaction
   const SQUISH = 'scaleY(0.88) scaleX(1.05)'
   function pressDown() {
@@ -924,6 +1033,9 @@
   })
   snapInput.addEventListener('change', () => applySnapThreshold(snapInput.value, true))
   turnCostToggle.addEventListener('change', () => applyTurnCostOn(turnCostToggle.checked, true))
+  if (dailyAlertToggle) {
+    dailyAlertToggle.addEventListener('change', () => applyDailyUsageAlertOn(dailyAlertToggle.checked, true))
+  }
   turnCostCloseInput.addEventListener('change', () => applyTurnCostClose(turnCostCloseInput.value, true))
   if (openChatBtn) {
     openChatBtn.addEventListener('click', () => {
@@ -1158,6 +1270,9 @@
       if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
       turnCostCloseInput.value = String(Math.round(turnCostCloseMs / 1000))
+      dailyUsageAlertOn = cfg.dailyUsageAlertOn !== false
+      dailyUsageLimit = typeof cfg.dailyUsageLimit === 'number' ? cfg.dailyUsageLimit : 300
+      if (dailyAlertToggle) dailyAlertToggle.checked = dailyUsageAlertOn
     }
 
     window.AudioManager.applySoundSet(soundSet, soundVol, soundOn)
@@ -1182,6 +1297,14 @@
         }
       }
     })
+
+    // Listen for Manual / Test Usage Alert trigger
+    if (typeof window.electronAPI.onUsageAlert === 'function') {
+      window.electronAPI.onUsageAlert((data) => {
+        const amt = (data && typeof data.amount === 'number') ? data.amount : (state.todayUsage || 305.5)
+        showUsageAlertBubble(amt, true)
+      })
+    }
 
     // Listen for external config changes (from settings dialog)
     // NEVER pass save=true here to prevent infinite recursive IPC loops!
@@ -1216,6 +1339,12 @@
       }
       if (newCfg.turnCostCloseMs !== undefined) {
         applyTurnCostClose(newCfg.turnCostCloseMs / 1000, false)
+      }
+      if (newCfg.dailyUsageAlertOn !== undefined) {
+        applyDailyUsageAlertOn(newCfg.dailyUsageAlertOn, false)
+      }
+      if (newCfg.dailyUsageLimit !== undefined) {
+        applyDailyUsageLimit(newCfg.dailyUsageLimit, false)
       }
     })
   }
