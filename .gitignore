@@ -24,3 +24,6 @@ $RECYCLE.BIN/
 .idea/
 *.sublime-project
 *.sublime-workspace
+
+# Preview Temporary Files
+preview-readme.html
