@@ -35,6 +35,7 @@
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
   const dailyAlertToggle = document.getElementById('daily-alert-toggle')
+  const dailyAlertLimitInput = document.getElementById('daily-alert-limit')
   const turnCostCloseInput = document.getElementById('turn-cost-close')
   const openChatBtn = document.getElementById('open-chat-btn')
   const openSettingsBtn = document.getElementById('open-settings-btn')
@@ -78,7 +79,7 @@
   let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
-  let dailyUsageAlertOn = true
+  let dailyUsageAlertOn = false
   let dailyUsageLimit = 300
 
   function getTodayString() {
@@ -848,14 +849,25 @@
   function applyDailyUsageAlertOn(v, save = true) {
     dailyUsageAlertOn = !!v
     if (dailyAlertToggle) dailyAlertToggle.checked = dailyUsageAlertOn
-    if (!dailyUsageAlertOn && usageAlertBubbleActive) hideUsageAlertBubble()
+    if (!dailyUsageAlertOn && usageAlertBubbleActive) {
+      hideUsageAlertBubble()
+    } else if (dailyUsageAlertOn && save) {
+      checkDailyUsageAlert(state.todayUsage)
+    }
     if (save) saveConfig()
   }
 
   function applyDailyUsageLimit(v, save = true) {
     const n = Math.max(1, Math.round(Number(v) || 300))
-    dailyUsageLimit = n
-    if (save) saveConfig()
+    if (n !== dailyUsageLimit) {
+      dailyUsageLimit = n
+      lastAlertDate = null
+    }
+    if (dailyAlertLimitInput) dailyAlertLimitInput.value = String(dailyUsageLimit)
+    if (save) {
+      saveConfig()
+      checkDailyUsageAlert(state.todayUsage)
+    }
   }
 
   // SQUISH & Press Interaction
@@ -1035,6 +1047,9 @@
   turnCostToggle.addEventListener('change', () => applyTurnCostOn(turnCostToggle.checked, true))
   if (dailyAlertToggle) {
     dailyAlertToggle.addEventListener('change', () => applyDailyUsageAlertOn(dailyAlertToggle.checked, true))
+  }
+  if (dailyAlertLimitInput) {
+    dailyAlertLimitInput.addEventListener('change', () => applyDailyUsageLimit(dailyAlertLimitInput.value, true))
   }
   turnCostCloseInput.addEventListener('change', () => applyTurnCostClose(turnCostCloseInput.value, true))
   if (openChatBtn) {
@@ -1270,9 +1285,10 @@
       if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
       turnCostCloseInput.value = String(Math.round(turnCostCloseMs / 1000))
-      dailyUsageAlertOn = cfg.dailyUsageAlertOn !== false
+      dailyUsageAlertOn = cfg.dailyUsageAlertOn === true
       dailyUsageLimit = typeof cfg.dailyUsageLimit === 'number' ? cfg.dailyUsageLimit : 300
       if (dailyAlertToggle) dailyAlertToggle.checked = dailyUsageAlertOn
+      if (dailyAlertLimitInput) dailyAlertLimitInput.value = String(dailyUsageLimit)
     }
 
     window.AudioManager.applySoundSet(soundSet, soundVol, soundOn)

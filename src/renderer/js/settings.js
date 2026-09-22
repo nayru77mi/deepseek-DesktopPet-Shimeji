@@ -37,7 +37,7 @@
       inputPlatformToken.value = config.platformToken || ''
       chkAlwaysOnTop.checked = config.alwaysOnTop !== false
       chkOpenAtLogin.checked = !!config.openAtLogin
-      chkDailyUsageAlert.checked = config.dailyUsageAlertOn !== false
+      chkDailyUsageAlert.checked = config.dailyUsageAlertOn === true
       inputDailyUsageLimit.value = typeof config.dailyUsageLimit === 'number' ? config.dailyUsageLimit : 300
       inputListenerPort.value = config.listenerPort || 37189
     }
