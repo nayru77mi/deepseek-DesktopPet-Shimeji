@@ -258,6 +258,16 @@ ipcMain.handle('test-cost', (event, amount) => {
   return { ok: true }
 })
 
+ipcMain.handle('test-usage-alert', (event, amount) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('trigger-usage-alert', {
+      amount: Number(amount) || 305.5,
+      force: true,
+    })
+  }
+  return { ok: true }
+})
+
 ipcMain.on('set-ignore-mouse-events', (event, ignore, options) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win && !win.isDestroyed()) {
