@@ -17,6 +17,7 @@ function finalizeTurn() {
       turn: turnAgg.turn,
       amount: turnAgg.cost,
       tokens: turnAgg.tokens,
+      cache: turnAgg.cache,
       ts: turnAgg.lastTs,
     }
     lastTurnSeq++
@@ -27,40 +28,55 @@ function finalizeTurn() {
   turnAgg = null
 }
 
+// 直接提交金额（README「方式 1」与设置页「测试消耗」按钮）。
+// 这类请求允许同时携带 end:true —— 早期实现里 end 分支先 return，会把它们
+// 整个吞掉，导致按钮与文档示例全部静默失效。
+function recordDirect(turn, d) {
+  const cost = Number(d.cost !== undefined ? d.cost : d.amount) || 0
+  if (cost <= 0) return
+  lastTurn = {
+    turn,
+    amount: cost,
+    tokens: Number(d.tokens) || 0,
+    cache: typeof d.cache === 'number' ? d.cache : null,
+    ts: Date.now(),
+  }
+  lastTurnSeq++
+  if (typeof onTurnEndCallback === 'function') {
+    onTurnEndCallback({ ok: true, seq: lastTurnSeq, ...lastTurn })
+  }
+}
+
 function handleTurnEvent(d) {
   if (!d || typeof d !== 'object') return
   const turn = Number(d.turn !== undefined ? d.turn : 1)
 
-  if (d.type === 'turn/end' || d.event === 'turn/end' || d.end === true) {
+  const usage = d.usage
+  const hasUsage = !!(usage && typeof usage === 'object')
+  const hasDirect = typeof d.cost === 'number' || typeof d.amount === 'number'
+  const isEnd = d.type === 'turn/end' || d.event === 'turn/end' || d.end === true
+
+  // 纯金额提交优先于 end 判定
+  if (hasDirect && !hasUsage) {
+    recordDirect(turn, d)
+    return
+  }
+
+  if (isEnd) {
     finalizeTurn()
     return
   }
 
-  // Direct cost submission
-  if (typeof d.cost === 'number' || typeof d.amount === 'number') {
-    const cost = Number(d.cost !== undefined ? d.cost : d.amount) || 0
-    if (cost > 0) {
-      lastTurn = {
-        turn,
-        amount: cost,
-        tokens: Number(d.tokens) || 0,
-        ts: Date.now(),
-      }
-      lastTurnSeq++
-      if (typeof onTurnEndCallback === 'function') {
-        onTurnEndCallback({ ok: true, seq: lastTurnSeq, ...lastTurn })
-      }
-    }
+  if (hasDirect) {
+    recordDirect(turn, d)
     return
   }
 
-  // Usage object accumulation
-  const usage = d.usage
-  if (!usage || typeof usage !== 'object') return
+  if (!hasUsage) return
 
   if (!turnAgg || turnAgg.turn !== turn) {
     if (turnAgg && turnAgg.turn !== turn) finalizeTurn()
-    turnAgg = { turn, cost: 0, tokens: 0, lastTs: Date.now() }
+    turnAgg = { turn, cost: 0, tokens: 0, cache: 0, lastTs: Date.now() }
   }
 
   const input = Number(usage.inputTokens || usage.prompt_tokens) || 0
@@ -68,6 +84,7 @@ function handleTurnEvent(d) {
   const output = Number(usage.outputTokens || usage.completion_tokens) || 0
   const reasoning = Number(usage.reasoningTokens || usage.reasoning_tokens) || 0
   turnAgg.tokens += input + cache + output + reasoning
+  turnAgg.cache += cache
 
   const model = d.model || ''
   const p = priceFor(model)
@@ -119,6 +136,7 @@ function startListener(port = 37189, onTurnEnd) {
         turn: lastTurn ? lastTurn.turn : null,
         amount: lastTurn ? lastTurn.amount : null,
         tokens: lastTurn ? lastTurn.tokens : null,
+        cache: lastTurn ? lastTurn.cache : null,
         ts: lastTurn ? lastTurn.ts : null,
       }))
       return
@@ -168,6 +186,7 @@ function getLastTurn() {
     turn: lastTurn ? lastTurn.turn : null,
     amount: lastTurn ? lastTurn.amount : null,
     tokens: lastTurn ? lastTurn.tokens : null,
+    cache: lastTurn ? lastTurn.cache : null,
     ts: lastTurn ? lastTurn.ts : null,
   }
 }
