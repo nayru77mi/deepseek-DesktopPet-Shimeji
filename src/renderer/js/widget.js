@@ -16,6 +16,8 @@
   const labelEl = document.getElementById('whale-label')
   const amountEl = document.getElementById('whale-amount')
   const hintEl = document.getElementById('whale-hint')
+  const hpFillEl = document.getElementById('whale-hp-fill')
+  const hpChipEl = document.getElementById('whale-peak-chip')
   const gifEl = document.getElementById('whale-gif')
   const menuBtn = document.getElementById('menu-btn')
   const menuBox = document.getElementById('menu-box')
@@ -31,6 +33,7 @@
   const usageSelect = document.getElementById('usage-select')
   const peakSelect = document.getElementById('peak-select')
   const bubbleToggle = document.getElementById('bubble-toggle')
+  const damageToggle = document.getElementById('damage-toggle')
   const snapInput = document.getElementById('snap-range')
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
@@ -71,6 +74,7 @@
   let usageMode = 'ledger'
   let peakMode = 'default'
   let bubbleOn = true
+  let damageOn = true
   let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
@@ -416,7 +420,31 @@
     animId = requestAnimationFrame(step)
   }
 
+  // 血条式余额：剩余 = 余额 / (余额 + 今日已用)，低于 50% 转橙、20% 转红闪烁
+  function updateHp() {
+    if (!hpFillEl) return
+    const bal = Number(state.balance)
+    const used = Number(state.todayUsage)
+    let ratio = 1
+    if (isFinite(bal) && isFinite(used) && used > 0) {
+      ratio = (bal + used) > 0 ? bal / (bal + used) : 0
+    } else if (isFinite(bal) && bal <= 0) {
+      ratio = 0
+    }
+    if (!isFinite(ratio)) ratio = 1
+    ratio = Math.max(0, Math.min(1, ratio))
+    hpFillEl.style.width = (ratio * 100).toFixed(1) + '%'
+    hpFillEl.classList.toggle('is-warn', ratio <= 0.5 && ratio > 0.2)
+    hpFillEl.classList.toggle('is-danger', ratio <= 0.2)
+    if (hpChipEl) {
+      const peak = !!state.isPeak
+      hpChipEl.textContent = peak ? '峰' : '谷'
+      hpChipEl.className = 'dshwv-hp-chip ' + (peak ? 'dshwv-hp-chip-on' : 'dshwv-hp-chip-off')
+    }
+  }
+
   function render() {
+    updateHp()
     if (costBubbleActive) return
     let amount, hint
     if (state.status === 'error') {
@@ -516,6 +544,7 @@
         usageMode: usageMode,
         peakMode: peakMode,
         bubbleOn: bubbleOn,
+        damageOn: damageOn,
         turnCostOn: turnCostOn,
         turnCostCloseMs: turnCostCloseMs,
         snapThreshold: snapThreshold,
@@ -727,6 +756,13 @@
     if (save) saveConfig()
   }
 
+  function applyDamageOn(v, save = true) {
+    damageOn = !!v
+    if (damageToggle) damageToggle.checked = damageOn
+    if (window.DamagePulse) window.DamagePulse.setEnabled(damageOn)
+    if (save) saveConfig()
+  }
+
   function applySnapThreshold(v, save = true) {
     const next = Math.max(0, Math.min(200, Math.round(Number(v) || 0)))
     snapThreshold = next
@@ -917,6 +953,9 @@
   usageSelect.addEventListener('change', () => applyUsageMode(usageSelect.value, true))
   peakSelect.addEventListener('change', () => applyPeakMode(peakSelect.value, true))
   bubbleToggle.addEventListener('change', () => applyBubbleOn(bubbleToggle.checked, true))
+  if (damageToggle) {
+    damageToggle.addEventListener('change', () => applyDamageOn(damageToggle.checked, true))
+  }
   snapInput.addEventListener('input', () => {
     const v = Math.round(Number(snapInput.value) || 0)
     snapThreshold = v
@@ -1136,6 +1175,7 @@
       usageMode = cfg.usageMode || 'ledger'
       peakMode = cfg.peakMode || 'default'
       bubbleOn = cfg.bubbleOn !== false
+      damageOn = cfg.damageOn !== false
       turnCostOn = cfg.turnCostOn !== false
       turnCostCloseMs = typeof cfg.turnCostCloseMs === 'number' ? cfg.turnCostCloseMs : 5000
       snapThreshold = typeof cfg.snapThreshold === 'number' ? cfg.snapThreshold : 60
@@ -1154,6 +1194,7 @@
       usageSelect.value = usageMode
       peakSelect.value = peakMode
       bubbleToggle.checked = bubbleOn
+      if (damageToggle) damageToggle.checked = damageOn
       if (snapInput) snapInput.value = String(snapThreshold)
       if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
@@ -1161,6 +1202,7 @@
     }
 
     window.AudioManager.applySoundSet(soundSet, soundVol, soundOn)
+    if (window.DamagePulse) window.DamagePulse.setEnabled(damageOn)
     render()
     refresh(false)
 
@@ -1179,6 +1221,8 @@
         lastCostSeq = turnData.seq
         if (turnData.amount !== null && turnData.amount !== undefined) {
           showCostBubble(Number(turnData.amount))
+          // 伤害飘字与连击（独立于气泡开关，由「飘字」开关控制）
+          if (window.DamagePulse) window.DamagePulse.emit(turnData)
         }
       }
     })
@@ -1207,6 +1251,9 @@
       }
       if (newCfg.bubbleOn !== undefined) {
         applyBubbleOn(newCfg.bubbleOn, false)
+      }
+      if (newCfg.damageOn !== undefined) {
+        applyDamageOn(newCfg.damageOn, false)
       }
       if (newCfg.snapThreshold !== undefined) {
         applySnapThreshold(newCfg.snapThreshold, false)

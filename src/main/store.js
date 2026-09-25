@@ -26,6 +26,7 @@ const DEFAULT_CONFIG = {
   usageMode: 'ledger',
   peakMode: 'default',
   bubbleOn: true,
+  damageOn: true,
   turnCostOn: true,
   turnCostCloseMs: 5000,
   snapThreshold: 60,

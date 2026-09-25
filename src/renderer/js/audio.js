@@ -13,12 +13,31 @@ const preloadedAudio = {
   },
 }
 
+// 受击专用音轨：独立实例，避免与摸头 press/release 抢同一 Audio 造成断音。
+// 复用现有 4 个音频文件，不新增资源（BUG-005：禁止按次新建 Audio）。
+const hitAudio = {
+  duck: {
+    normal: new Audio('../../assets/Ya2.mp3'),
+    crit: new Audio('../../assets/Ya1.mp3'),
+  },
+  fx1: {
+    normal: new Audio('../../assets/D2.mp3'),
+    crit: new Audio('../../assets/D1.mp3'),
+  },
+}
+
 // Preload settings
 for (const set of Object.values(preloadedAudio)) {
   set.press.preload = 'auto'
   set.press.volume = soundVol
   set.release.preload = 'auto'
   set.release.volume = soundVol
+}
+for (const set of Object.values(hitAudio)) {
+  for (const a of Object.values(set)) {
+    a.preload = 'auto'
+    a.volume = soundVol
+  }
 }
 
 let pressing = false
@@ -43,6 +62,22 @@ function setVolume(vol) {
     set.press.volume = soundVol
     set.release.volume = soundVol
   }
+  for (const set of Object.values(hitAudio)) {
+    for (const a of Object.values(set)) a.volume = soundVol
+  }
+}
+
+// 扣费受击音：normal 轻、crit 重，节流由 DamagePulse 侧保证
+function playHit(kind) {
+  if (!soundOn || soundVol <= 0) return
+  const set = hitAudio[soundSet] || hitAudio.duck
+  const a = kind === 'crit' ? set.crit : set.normal
+  try {
+    a.volume = Math.min(1, soundVol * (kind === 'crit' ? 1 : 0.6))
+    a.currentTime = 0
+    const p = a.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  } catch (err) {}
 }
 
 function playPress() {
@@ -114,6 +149,7 @@ window.AudioManager = {
   applySoundSet,
   playPress,
   playRelease,
+  playHit,
   onSquishDown,
   onSquishUp,
   setVolume,
