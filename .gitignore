@@ -27,3 +27,7 @@ $RECYCLE.BIN/
 
 # Preview Temporary Files
 preview-readme.html
+
+# Local Screenshot / Media Scratch
+tmp_media/
+build-log.txt
