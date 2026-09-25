@@ -5,10 +5,10 @@
 
 常驻桌面的轻量无边框挂件 · API 余额实时监控 · 峰谷阶梯记账 · 对话消耗结算泡泡 · 像素级鼠标穿透
 
-[![GitHub Release](https://img.shields.io/github/v/release/nayru77mi/deepseek-Whale-Girl-Desk-Pet?style=flat-square&color=3b82f6)](https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/nayru77mi/deepseek-DesktopPet-Shimeji?style=flat-square&color=3b82f6)](https://github.com/nayru77mi/deepseek-DesktopPet-Shimeji/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE)
 [![Electron](https://img.shields.io/badge/Electron-33.2.1-47848F?style=flat-square&logo=electron&logoColor=white)](https://electronjs.org/)
-[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/nayru77mi/deepseek-DesktopPet-Shimeji)
 [![DeepSeek API](https://img.shields.io/badge/API-DeepSeek-blue?style=flat-square)](https://platform.deepseek.com/)
 
 <br/>
@@ -67,7 +67,7 @@
 
 ### 方式 A：直接下载（推荐普通用户）
 
-前往 **[GitHub Releases 发布页](https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet/releases)** 下载最新版预编译文件：
+前往 **[GitHub Releases 发布页](https://github.com/nayru77mi/deepseek-DesktopPet-Shimeji/releases)** 下载最新版预编译文件：
 
 | 版本类型 | 文件名示例 | 特点说明 |
 | :--- | :--- | :--- |
@@ -89,8 +89,8 @@
 
 ```powershell
 # 1. 克隆代码仓库并安装依赖 (建议 Node.js >= 18)
-git clone https://github.com/nayru77mi/deepseek-Whale-Girl-Desk-Pet.git
-cd deepseek-Whale-Girl-Desk-Pet
+git clone https://github.com/nayru77mi/deepseek-DesktopPet-Shimeji.git
+cd deepseek-DesktopPet-Shimeji
 pnpm install
 
 # 2. 启动开发环境
