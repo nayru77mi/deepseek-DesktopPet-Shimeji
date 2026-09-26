@@ -28,6 +28,7 @@ html, body {
   bottom: 15px;
   --dshw-scale: 1.5;
   --dshw-base: calc(180px * var(--dshw-scale));
+  --dshw-pill-len: 1;
   width: var(--dshw-base);
   height: var(--dshw-base);
   pointer-events: none;
@@ -220,9 +221,17 @@ html, body {
    血量 = 余额 / (余额 + 今日已用)，≤50% 转橙、≤20% 转红闪烁。 */
 .dshwv-pill {
   position: absolute;
-  left: calc(var(--dshw-base) * -0.34);
+  /* 右端固定停在鲸鱼左边界之前（0.36 < 鲸鱼起点 0.405），绝不压住小鲸鱼；
+     长度向左延伸，最长受窗口左边距 150px 限制，否则会被窗口边缘裁掉。
+     --dshw-pill-len 由汉堡菜单「血条长度」滑条控制（0.6 ~ 1.6）。 */
+  --dshw-pill-r: calc(var(--dshw-base) * 0.36);
+  --dshw-pill-w: min(
+    calc(var(--dshw-base) * 0.78 * var(--dshw-pill-len, 1)),
+    calc(150px + var(--dshw-base) * 0.36)
+  );
+  left: calc(var(--dshw-pill-r) - var(--dshw-pill-w));
+  width: var(--dshw-pill-w);
   bottom: calc(var(--dshw-base) * 0.05);
-  width: calc(var(--dshw-base) * 0.94);
   height: calc(var(--dshw-base) * 0.118);
   border-radius: calc(var(--dshw-base) * 0.06);
   background: rgba(16, 22, 44, .86);

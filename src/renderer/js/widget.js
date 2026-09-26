@@ -35,6 +35,8 @@
   const peakSelect = document.getElementById('peak-select')
   const bubbleToggle = document.getElementById('bubble-toggle')
   const damageToggle = document.getElementById('damage-toggle')
+  const pillLenRange = document.getElementById('pill-len-range')
+  const pillLenVal = document.getElementById('pill-len-val')
   const snapInput = document.getElementById('snap-range')
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
@@ -55,6 +57,8 @@
   }
 
   let busy = false
+  let refreshQueued = false
+  let refreshQueuedManual = false
   let settleTimer = null
   let animDelayTimer = null
   let drag = null
@@ -75,6 +79,7 @@
   let peakMode = 'default'
   let bubbleOn = true
   let damageOn = true
+  let pillLen = 1
   let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
@@ -481,7 +486,12 @@
   }
 
   async function refresh(manual) {
-    if (busy) return
+    if (busy) {
+      // 正在刷新时来新请求：排队而不是丢弃（丢弃会让测试模式的血条慢一拍）
+      refreshQueued = true
+      refreshQueuedManual = refreshQueuedManual || !!manual
+      return
+    }
     busy = true
     if (animDelayTimer) {
       clearTimeout(animDelayTimer)
@@ -542,6 +552,12 @@
       render()
     } finally {
       busy = false
+      if (refreshQueued) {
+        const m = refreshQueuedManual
+        refreshQueued = false
+        refreshQueuedManual = false
+        refresh(m)
+      }
     }
   }
 
@@ -556,6 +572,7 @@
         peakMode: peakMode,
         bubbleOn: bubbleOn,
         damageOn: damageOn,
+        pillLen: pillLen,
         turnCostOn: turnCostOn,
         turnCostCloseMs: turnCostCloseMs,
         snapThreshold: snapThreshold,
@@ -774,6 +791,27 @@
     if (save) saveConfig()
   }
 
+  // 常驻血条长度（0.6x ~ 1.6x）：只改 CSS 变量，右端始终停在小鲸鱼左侧
+  function applyPillLen(v, save = true) {
+    const num = Number(v)
+    const n = isFinite(num) ? Math.max(0.6, Math.min(1.6, Math.round(num * 10) / 10)) : 1
+    pillLen = n
+    root.style.setProperty('--dshw-pill-len', String(n))
+    if (pillLenRange) pillLenRange.value = String(n)
+    if (pillLenVal) pillLenVal.textContent = n.toFixed(1) + 'x'
+    if (save) schedulePillLenSave()
+  }
+
+  let pillLenSaveTimer = null
+  function schedulePillLenSave() {
+    // 拖滑条过程中高频落盘会卡顿（BUG-005），防抖合并
+    if (pillLenSaveTimer) clearTimeout(pillLenSaveTimer)
+    pillLenSaveTimer = setTimeout(() => {
+      pillLenSaveTimer = null
+      saveConfig()
+    }, 400)
+  }
+
   function applySnapThreshold(v, save = true) {
     const next = Math.max(0, Math.min(200, Math.round(Number(v) || 0)))
     snapThreshold = next
@@ -966,6 +1004,10 @@
   bubbleToggle.addEventListener('change', () => applyBubbleOn(bubbleToggle.checked, true))
   if (damageToggle) {
     damageToggle.addEventListener('change', () => applyDamageOn(damageToggle.checked, true))
+  }
+  if (pillLenRange) {
+    pillLenRange.addEventListener('input', () => applyPillLen(pillLenRange.value, true))
+    pillLenRange.addEventListener('change', () => applyPillLen(pillLenRange.value, true))
   }
   snapInput.addEventListener('input', () => {
     const v = Math.round(Number(snapInput.value) || 0)
@@ -1206,6 +1248,7 @@
       peakSelect.value = peakMode
       bubbleToggle.checked = bubbleOn
       if (damageToggle) damageToggle.checked = damageOn
+      applyPillLen(cfg.pillLen === undefined ? 1 : cfg.pillLen, false)
       if (snapInput) snapInput.value = String(snapThreshold)
       if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
@@ -1237,6 +1280,8 @@
           showCostBubble(Number(turnData.amount))
           // 伤害飘字与连击（独立于气泡开关，由「飘字」开关控制）
           if (window.DamagePulse) window.DamagePulse.emit(turnData)
+          // 测试模式下余额被实时扣减，立刻刷新血条；真实模式命中 25s 缓存，不会多打接口
+          refresh(false)
         }
       }
     })
@@ -1268,6 +1313,13 @@
       }
       if (newCfg.damageOn !== undefined) {
         applyDamageOn(newCfg.damageOn, false)
+      }
+      if (newCfg.pillLen !== undefined) {
+        applyPillLen(newCfg.pillLen, false)
+      }
+      if (newCfg.testBalance !== undefined || newCfg.testUsage !== undefined || newCfg.testMode !== undefined) {
+        // 测试面板改了自定义余额 / 开关测试模式 → 立刻反映到血条
+        refresh(false)
       }
       if (newCfg.snapThreshold !== undefined) {
         applySnapThreshold(newCfg.snapThreshold, false)
