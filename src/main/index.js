@@ -28,10 +28,17 @@ let mainWindow = null
 let settingsWindow = null
 let tray = null
 
-function calculateWindowSize(scale = 1.5) {
+// 血条向左伸出 root 的距离 —— 必须与 CSS 的
+// left = 0.36*base - 0.78*base*len 保持一致，否则窗口不够宽会把血条左边裁掉
+function pillOverhang(basePx, len) {
+  const n = Math.max(0.6, Math.min(1.6, Number(len) || 1))
+  return Math.max(0, Math.ceil(basePx * (0.78 * n - 0.36) + 24))
+}
+
+function calculateWindowSize(scale = 1.5, pillLen = 1) {
   const basePx = Math.round(180 * scale)
   return {
-    width: basePx + 180,
+    width: basePx + Math.max(180, pillOverhang(basePx, pillLen)),
     height: basePx + 200,
   }
 }
@@ -96,7 +103,7 @@ function watchDisplays() {
 
 function createMainWindow() {
   const config = readConfig()
-  const { width, height } = calculateWindowSize(config.scale || 1.5)
+  const { width, height } = calculateWindowSize(config.scale || 1.5, config.pillLen)
   const { x: winX, y: winY } = getSafePosition(width, height, config.windowPos)
 
   mainWindow = new BrowserWindow({
@@ -314,8 +321,9 @@ ipcMain.handle('set-test-mode', (event, on) => {
 })
 
 ipcMain.handle('set-test-balance', (event, balance) => {
-  const b = Number(balance)
-  if (!isFinite(b) || b < 0) return { ok: false, error: '余额必须是 ≥ 0 的数字' }
+  const raw = Number(balance)
+  if (!isFinite(raw) || raw < 0) return { ok: false, error: '余额必须是 ≥ 0 的数字' }
+  const b = Math.round(raw * 10000) / 10000 // 去掉浮点噪声，避免输入框出现 99.9463000000
   writeConfig({ testBalance: b, testUsage: 0 })
   clearBalanceCache()
   broadcastConfig({ testBalance: b, testUsage: 0 }, event.sender)
@@ -396,8 +404,8 @@ function applyTestCost(turnData) {
     const amount = Number(turnData.amount)
     if (!isFinite(amount) || amount <= 0) return
     const bal = Number(cfg.testBalance)
-    const nextBal = Math.max(0, (isFinite(bal) ? bal : 0) - amount)
-    const nextUsage = (Number(cfg.testUsage) || 0) + amount
+    const nextBal = Math.round(Math.max(0, (isFinite(bal) ? bal : 0) - amount) * 10000) / 10000
+    const nextUsage = Math.round(((Number(cfg.testUsage) || 0) + amount) * 10000) / 10000
     writeConfig({ testBalance: nextBal, testUsage: nextUsage })
     broadcastConfig({ testBalance: nextBal, testUsage: nextUsage }, null)
   } catch (err) {

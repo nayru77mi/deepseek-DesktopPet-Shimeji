@@ -689,7 +689,9 @@
 
   async function flushWindowResize(seq, givenBounds, givenWorkArea) {
     const basePx = Math.round(180 * state.scale)
-    let winWidth = basePx + 180
+    // 血条变长要向左伸出 root，窗口必须同步加宽，否则血条左边被窗口裁掉
+    const pillExtra = Math.max(180, Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24))
+    let winWidth = basePx + pillExtra
     let winHeight = basePx + 200
     // While the menu is open, never shrink the window below the menu size,
     // otherwise its top rows (e.g. the size slider) get clipped again.
@@ -795,10 +797,12 @@
   function applyPillLen(v, save = true) {
     const num = Number(v)
     const n = isFinite(num) ? Math.max(0.6, Math.min(1.6, Math.round(num * 10) / 10)) : 1
+    const prev = pillLen
     pillLen = n
     root.style.setProperty('--dshw-pill-len', String(n))
     if (pillLenRange) pillLenRange.value = String(n)
     if (pillLenVal) pillLenVal.textContent = n.toFixed(1) + 'x'
+    if (n !== prev) scheduleResize() // 血条变长 → 窗口同步加宽，否则左边被裁
     if (save) schedulePillLenSave()
   }
 

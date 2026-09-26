@@ -222,13 +222,11 @@ html, body {
 .dshwv-pill {
   position: absolute;
   /* 右端固定停在鲸鱼左边界之前（0.36 < 鲸鱼起点 0.405），绝不压住小鲸鱼；
-     长度向左延伸，最长受窗口左边距 150px 限制，否则会被窗口边缘裁掉。
-     --dshw-pill-len 由汉堡菜单「血条长度」滑条控制（0.6 ~ 1.6）。 */
+     长度向左延伸，窗口宽度由 calculateWindowSize()/flushWindowResize() 按
+     同一公式同步加宽（pillOverhang），所以这里不再钳位 —— 否则 1.05x 之后
+     再拖滑条就"没有变化"了。 */
   --dshw-pill-r: calc(var(--dshw-base) * 0.36);
-  --dshw-pill-w: min(
-    calc(var(--dshw-base) * 0.78 * var(--dshw-pill-len, 1)),
-    calc(150px + var(--dshw-base) * 0.36)
-  );
+  --dshw-pill-w: calc(var(--dshw-base) * 0.78 * var(--dshw-pill-len, 1));
   left: calc(var(--dshw-pill-r) - var(--dshw-pill-w));
   width: var(--dshw-pill-w);
   bottom: calc(var(--dshw-base) * 0.05);

@@ -61,7 +61,10 @@
       testCfg.testBalance = config.testBalance
       testCfg.testUsage = config.testUsage
       chkTestMode.checked = testCfg.testMode
-      if (isFinite(Number(config.testBalance))) inputTestBalance.value = Number(config.testBalance)
+      if (isFinite(Number(config.testBalance))) {
+        // 金额按分显示，避免 99.9463000000 这类浮点噪声吓到人
+        inputTestBalance.value = Math.round(Number(config.testBalance) * 100) / 100
+      }
       renderTestStatus()
     }
   } catch (err) {
