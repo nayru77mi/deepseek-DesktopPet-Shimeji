@@ -221,7 +221,7 @@ async function main() {
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: sx, y: sy, button: 'left', buttons: 1, clickCount: 1 })
     await sleep(60)
     const started = await evalJs(
-      "JSON.stringify({ dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging'), label: document.getElementById('pill-dx-val').textContent })"
+      "JSON.stringify({ dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging'), dx: (() => { const r = document.getElementById('whale-root'); const c = parseFloat(r.style.getPropertyValue('--dshw-pill-dx')) || 0; return r.classList.contains('dshwv-left') ? -c : c })() })"
     )
     const steps = 10
     for (let i = 1; i <= steps; i++) {
@@ -238,8 +238,11 @@ async function main() {
     await sleep(500)
     const after = await evalJs(`(() => { const b = document.getElementById('balance-pill').getBoundingClientRect()
         const w = document.getElementById('whale-img').getBoundingClientRect()
-        return JSON.stringify({ label: document.getElementById('pill-dx-val').textContent,
+        return JSON.stringify({ dx: (() => { const r = document.getElementById('whale-root')
+              const c = parseFloat(r.style.getPropertyValue('--dshw-pill-dx')) || 0
+              return r.classList.contains('dshwv-left') ? -c : c })(),
           cssVar: document.getElementById('whale-root').style.getPropertyValue('--dshw-pill-dx'),
+          cursor: getComputedStyle(document.getElementById('balance-pill')).cursor,
           pillLeft: Math.round(b.left), pillRight: Math.round(b.right), winW: window.innerWidth,
           gap: Math.round(w.left - b.right), inWindow: b.left >= 0, dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging') })
       })()`)

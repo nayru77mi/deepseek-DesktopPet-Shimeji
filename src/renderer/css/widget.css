@@ -240,9 +240,9 @@ html, body {
   gap: calc(var(--dshw-base) * .02);
   padding: 0 calc(var(--dshw-base) * .035);
   overflow: hidden;
-  /* 可按住左右拖动微调位置（穿透由 root 的 mouseenter 统一接管） */
+  /* 手型指针，和悬停小鲸鱼时一致 —— 提示用户可以按住左右拖动 */
   pointer-events: auto;
-  cursor: ew-resize;
+  cursor: grab;
   z-index: 4;
   font-size: calc(var(--dshw-base) * .055);
   line-height: 1;
