@@ -6,6 +6,7 @@
 //   1. 以远程调试端口启动：electron . --remote-debugging-port=9223
 //   2. node scripts/verify-damage.js [port]
 const http = require('node:http')
+const fs = require('node:fs')
 
 const DEBUG_PORT = Number(process.argv[2]) || 9223
 const PET_PORT = 37189
@@ -102,9 +103,13 @@ async function stress(send, evalJs, errors) {
 
 async function hpState(evalJs) {
   const s = await evalJs(`(() => {
-    const f = document.getElementById('whale-hp-fill')
-    const c = document.getElementById('whale-peak-chip')
+    const f = document.getElementById('pill-fill')
+    const c = document.getElementById('pill-chip')
+    const p = document.getElementById('balance-pill')
+    const r = p.getBoundingClientRect()
     return { width: f.style.width, cls: f.className, chip: c.textContent,
+             amount: document.getElementById('pill-amount').textContent,
+             visible: r.width > 0 && r.height > 0, rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
              hint: document.getElementById('whale-hint').textContent }
   })()`)
   console.log(JSON.stringify(s))
@@ -188,6 +193,31 @@ async function main() {
     return
   }
 
+  // 通用表达式求值：node scripts/verify-damage.js <port> eval "<js 表达式>"
+  if (mode === 'eval') {
+    const v = await evalJs(process.argv[4] || '1')
+    console.log(JSON.stringify(v))
+    close()
+    return
+  }
+
+  // 渲染层截图（不经屏幕合成，不受旧帧污染）：
+  // node scripts/verify-damage.js <port> shot ["<js 触发表达式>"] [延迟ms] [输出路径]
+  if (mode === 'shot') {
+    const expr = process.argv[4] || 'window.DamagePulse.emit({ amount: 0.4040, tokens: 6000, cache: 0 })'
+    const delay = Number(process.argv[5]) || 220
+    const out = process.argv[6] || 'tmp_media/cdp_shot.png'
+    await send('Page.enable')
+    await evalJs(expr)
+    await sleep(delay)
+    const shot = await send('Page.captureScreenshot', { format: 'png' })
+    fs.writeFileSync(out, Buffer.from(shot.data, 'base64'))
+    const live = await evalJs("JSON.stringify([...document.querySelectorAll('.dshwv-dmg')].map(e => e.textContent))")
+    console.log('saved', out, '| live popups at capture:', live)
+    close()
+    return
+  }
+
   // 三笔小额（模拟一轮连续扣费）
   await postEvent({ amount: 0.0037, turn: 1, end: true })
   await sleep(140)
@@ -232,22 +262,25 @@ async function main() {
   const crit = await snap()
   console.log('\ncrit popup:', JSON.stringify(crit, null, 2))
 
-  // 受击反馈 / 打击音 / 血条状态
+  // 受击反馈 / 打击音 / 常驻血条状态
   const fx = await evalJs(`(() => {
     const i = document.getElementById('whale-img')
-    const f = document.getElementById('whale-hp-fill')
-    const c = document.getElementById('whale-peak-chip')
+    const f = document.getElementById('pill-fill')
+    const c = document.getElementById('pill-chip')
+    const p = document.getElementById('balance-pill')
+    const pr = p.getBoundingClientRect()
     return {
       hitClass: i.className,
-      hpWidth: f.style.width,
-      hpState: f.className,
+      pillWidth: f.style.width,
+      pillState: f.className,
+      pillAmount: document.getElementById('pill-amount').textContent,
+      pillRect: { x: Math.round(pr.x), y: Math.round(pr.y), w: Math.round(pr.width), h: Math.round(pr.height) },
       chip: c.textContent + ' | ' + c.className,
-      amount: document.getElementById('whale-amount').textContent,
-      hint: document.getElementById('whale-hint').textContent,
+      bubbleAmount: document.getElementById('whale-amount').textContent,
       playHit: typeof window.AudioManager.playHit
     }
   })()`)
-  console.log('hit/hp state:', JSON.stringify(fx, null, 2))
+  console.log('hit/pill state:', JSON.stringify(fx, null, 2))
 
   // 缓存未命中 → 暴击（走 usage 聚合路径）
   await sleep(1400)
