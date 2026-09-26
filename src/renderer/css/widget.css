@@ -616,11 +616,14 @@ html, body {
   }
 }
 
-/* 连击计数（放在飘字层内，自动继承左吸附镜像还原） */
+/* 连击计数（放在飘字层内，自动继承左吸附镜像还原）
+   位置必须整体挪出飘字轨道：飘字从 top:11% 出生、一路飞到 11% - 78px，
+   正好穿过原来的 top:2% —— 实测两者叠在一起（橙字压橙字）糊成一团。
+   calc(2% - 95px) 在 0.6x~2.5x 全档都稳稳落在飘字最高点之上 15px 开外。 */
 .dshwv-combo {
   position: absolute;
   left: 50%;
-  top: 2%;
+  top: calc(2% - 95px);
   transform: translateX(-50%) scale(.78);
   white-space: nowrap;
   pointer-events: none;
