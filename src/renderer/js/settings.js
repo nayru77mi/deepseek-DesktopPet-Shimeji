@@ -21,17 +21,26 @@
   const btnCostCrit = document.getElementById('btn-cost-crit')
   const btnResetUsage = document.getElementById('btn-reset-usage')
   const testStatus = document.getElementById('test-status')
+  const testModeGuide = document.getElementById('test-mode-guide')
 
   const testCfg = { testMode: false, testBalance: 100, testUsage: 0 }
 
   function renderTestStatus() {
+    if (testModeGuide) {
+      // 紧挨开关的状态说明：告诉用户当前在哪个模式、演练完怎么回到真实接口
+      testModeGuide.textContent = testCfg.testMode
+        ? '测试模式已开启 · 可自定义余额演练普通 / 暴击扣费（不请求 DeepSeek 接口）。演练完毕后，取消勾选上方开关即可回到真实接口与真实余额。'
+        : '测试模式已关闭 · 当前显示真实 API 余额。需要演练时勾选上方开关，即可自定义余额演练扣费。'
+      testModeGuide.classList.toggle('is-on', !!testCfg.testMode)
+      testModeGuide.classList.toggle('is-off', !testCfg.testMode)
+    }
     if (!testStatus) return
     const bal = Number(testCfg.testBalance)
     const used = Number(testCfg.testUsage) || 0
     const ratio = bal + used > 0 ? bal / (bal + used) : 0
     testStatus.textContent = testCfg.testMode
       ? `🧪 测试模式开启 · 余额 ¥${isFinite(bal) ? bal.toFixed(2) : '--'} · 今日已用 ¥${used.toFixed(2)} · 血量 ${(ratio * 100).toFixed(0)}%`
-      : '测试模式已关闭 —— 勾选上方开关即可用自定义余额演练扣费'
+      : '测试模式已关闭 · 下方「普通 / 暴击扣费」是演练按钮，开启测试模式后才能使用'
   }
 
   function showToast(msg) {
