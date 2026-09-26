@@ -39,27 +39,51 @@ function getSafePosition(width, height, savedPos) {
     return { x: defaultX, y: defaultY }
   }
 
-  const allDisplays = screen.getAllDisplays()
-  let isVisible = false
-
-  for (const display of allDisplays) {
+  // 必须有「大部分窗口面积」落在某块屏幕工作区内才算安全。
+  // 旧实现只检查左上角一个点：窗口只要左上角在范围内就判定可见，换显示器、
+  // 改分辨率或拖拽后可能出现「仅剩一小截在屏内、鲸鱼本体整个在外面」的情况，
+  // 用户会以为桌宠消失了。按面积重叠判定可以彻底杜绝这类丢宠。
+  const MIN_OVERLAP = 0.6
+  for (const display of screen.getAllDisplays()) {
     const wa = display.workArea
-    if (
-      savedPos.x >= wa.x - 50 &&
-      savedPos.x <= wa.x + wa.width - 100 &&
-      savedPos.y >= wa.y - 50 &&
-      savedPos.y <= wa.y + wa.height - 100
-    ) {
-      isVisible = true
-      break
+    const overlapW = Math.min(savedPos.x + width, wa.x + wa.width) - Math.max(savedPos.x, wa.x)
+    const overlapH = Math.min(savedPos.y + height, wa.y + wa.height) - Math.max(savedPos.y, wa.y)
+    if (overlapW >= width * MIN_OVERLAP && overlapH >= height * MIN_OVERLAP) {
+      return { x: savedPos.x, y: savedPos.y }
     }
   }
 
-  if (!isVisible) {
-    return { x: defaultX, y: defaultY }
-  }
+  return { x: defaultX, y: defaultY }
+}
 
-  return { x: savedPos.x, y: savedPos.y }
+// 显示器热插拔 / 分辨率变化后重新校验窗口位置（防止窗口留在已消失的屏幕坐标上）。
+// 只允许 setPosition，严禁 setBounds —— 每帧改尺寸会让 Windows DWM
+// 重建显存表面导致卡死（BUG-001）。
+let displayGuardTimer = null
+function keepWindowOnScreen() {
+  if (displayGuardTimer) return
+  displayGuardTimer = setTimeout(() => {
+    displayGuardTimer = null
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    try {
+      const b = mainWindow.getBounds()
+      const next = getSafePosition(b.width, b.height, { x: b.x, y: b.y })
+      if (next.x !== b.x || next.y !== b.y) {
+        mainWindow.setPosition(next.x, next.y)
+        const edgeX = next.x + b.width / 2 < screen.getPrimaryDisplay().workArea.width / 2 ? 'left' : 'right'
+        writeConfig({ windowPos: { x: next.x, y: next.y, h: edgeX, v: 'bottom' } })
+        console.log(`[DisplayGuard] window moved back on-screen: (${b.x},${b.y}) -> (${next.x},${next.y})`)
+      }
+    } catch (err) {
+      console.error('[DisplayGuard] failed:', err)
+    }
+  }, 400)
+}
+
+function watchDisplays() {
+  screen.on('display-added', keepWindowOnScreen)
+  screen.on('display-removed', keepWindowOnScreen)
+  screen.on('metrics-changed', keepWindowOnScreen)
 }
 
 function createMainWindow() {
@@ -320,6 +344,7 @@ app.whenReady().then(() => {
   const config = readConfig()
   createMainWindow()
   createTray()
+  watchDisplays()
 
   // Start turn cost local listener
   startListener(config.listenerPort || 37189, (turnData) => {
