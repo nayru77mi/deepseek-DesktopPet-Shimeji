@@ -695,14 +695,14 @@
     return Math.ceil(rootH + 25 - menuBox.offsetTop)
   }
 
-  async function flushWindowResize(seq, givenBounds, givenWorkArea, forceDx) {
+  async function flushWindowResize(seq, givenBounds, givenWorkArea) {
     const basePx = Math.round(180 * state.scale)
-    // 血条变长 / 向左微调都要向左伸出 root，窗口必须同步加宽，否则血条被裁
-    const dxUsed = forceDx === undefined || forceDx === null ? pillDx : forceDx
-    const pillExtra = Math.max(
-      180,
-      Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24 + Math.abs(dxUsed))
-    )
+    // 窗口宽按「血条最长 + 位移最远」一次性留够（必须与主进程
+    // calculateWindowSize 的 pillOverhang(base, 1.6, 240) 完全一致）。
+    // 于是调血条长度、拖血条位置只改 CSS，永远不需要 resize ——
+    // 透明窗口每次 setBounds 都会让 DWM 重建合成表面并闪一下（BUG-001 同源），
+    // 这正是「调整血条时一闪一闪」的根因。
+    const pillExtra = Math.max(180, Math.ceil(basePx * (0.78 * 1.6 - 0.36) + 24 + 240))
     let winWidth = basePx + pillExtra
     let winHeight = basePx + 200
     // While the menu is open, never shrink the window below the menu size,
@@ -734,12 +734,38 @@
       newY = currentBounds.y + (currentBounds.height - winHeight)
     }
 
-    newX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - winWidth, newX))
-    newY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - winHeight, newY))
+    // 夹取按「内容边界」算：窗口的透明预留允许伸出屏幕，否则鲸鱼刚被
+    // 拖到屏幕左边，下一次 flush 就会被整窗必须在屏内的旧规则顶回去。
+    const margin = contentMargins({ width: winWidth, height: winHeight })
+    newX = Math.max(workArea.x - margin.left, Math.min(workArea.x + workArea.width - winWidth + margin.right, newX))
+    newY = Math.max(workArea.y - margin.top, Math.min(workArea.y + workArea.height - winHeight, newY))
 
     const applied = { x: newX, y: newY, width: winWidth, height: winHeight }
-    window.electronAPI.setWindowBounds(applied)
+    const unchanged =
+      applied.x === currentBounds.x && applied.y === currentBounds.y &&
+      applied.width === currentBounds.width && applied.height === currentBounds.height
+    // 尺寸没变就不发 IPC：多发一次 setBounds 只会白闪一下
+    if (!unchanged) window.electronAPI.setWindowBounds(applied)
     return applied
+  }
+
+  // 内容矩形（鲸鱼 + 血条真正画东西的部分）相对窗口的边距。
+  // 窗口比内容宽出来的部分是纯透明预留，拖动夹取与吸附判定都必须按内容算，
+  // 否则透明边距会把鲸鱼能去的位置一路挤到屏幕右侧（窗口越宽挤得越多）。
+  function contentMargins(bounds) {
+    const w = bounds && bounds.width ? bounds.width : window.innerWidth
+    const h = bounds && bounds.height ? bounds.height : window.innerHeight
+    const basePx = Math.round(180 * state.scale)
+    const usedW = basePx + Math.max(180, Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24 + Math.abs(pillDx)))
+    const usedH = basePx + 200
+    const tailX = Math.max(0, w - usedW)
+    const tailY = Math.max(0, h - usedH)
+    const mirrored = state.h === 'left'
+    return {
+      left: mirrored ? 0 : tailX,   // 内容左缘距窗口左缘
+      right: mirrored ? tailX : 0,  // 内容右缘距窗口右缘
+      top: tailY,
+    }
   }
 
   // When the menu opens, grow the window upward if the current (possibly
@@ -805,16 +831,16 @@
     if (save) saveConfig()
   }
 
-  // 常驻血条长度（0.6x ~ 1.6x）：只改 CSS 变量，右端始终停在小鲸鱼左侧
+  // 常驻血条长度（0.6x ~ 1.6x）：只改 CSS 变量，右端始终停在小鲸鱼左侧。
+  // 这里绝不 scheduleResize：窗口宽度已按最长 1.6x 一次性留够
+  // （见 flushWindowResize），调整时 resize 会让透明窗口闪（BUG-001 同源）。
   function applyPillLen(v, save = true) {
     const num = Number(v)
     const n = isFinite(num) ? Math.max(0.6, Math.min(1.6, Math.round(num * 10) / 10)) : 1
-    const prev = pillLen
     pillLen = n
     root.style.setProperty('--dshw-pill-len', String(n))
     if (pillLenRange) pillLenRange.value = String(n)
     if (pillLenVal) pillLenVal.textContent = n.toFixed(1) + 'x'
-    if (n !== prev) scheduleResize() // 血条变长 → 窗口同步加宽，否则左边被裁
     if (save) schedulePillLenSave()
   }
 
@@ -872,8 +898,19 @@
     const kLeft = pr.left - applied // 未偏移基准：rect 里已含 applied，先减掉
     const kRight = pr.right - applied
 
-    let min = clampWindow === false ? -Infinity : Math.round(4 - kLeft) // 窗口左边界
-    let max = clampWindow === false ? Infinity : Math.round(window.innerWidth - 4 - kRight) // 窗口右边界
+    let min = -Infinity
+    let max = Infinity
+    if (clampWindow !== false) {
+      // 同时守窗口与屏幕两条边界：窗口为了「零 resize」常驻留有透明预留，
+      // 这段预留可能伸出屏幕外，只按窗口夹会把血条拖到屏幕外面去。
+      const wa = (pillDrag && pillDrag.workArea) || { x: 0, width: 0 }
+      const winX = pillDrag && typeof pillDrag.winX === 'number' ? pillDrag.winX : (window.screenX || 0)
+      const minVp = Math.max(4, wa.x + 4 - winX)
+      let maxVp = window.innerWidth - 4
+      if (wa.width) maxVp = Math.min(maxVp, wa.x + wa.width - 4 - winX)
+      min = Math.round(minVp - kLeft)
+      max = Math.round(maxVp - kRight)
+    }
     if (mirrored) {
       // 镜像：血条在小鲸鱼右侧，只能向右让开，不能向左压进去
       min = Math.max(min, Math.round(wr.right + 8 - kLeft))
@@ -892,24 +929,21 @@
     return Math.max(-240, Math.min(120, Math.round(n)))
   }
 
-  // 血条位置左右微调：dx<0 向左（窗口需要加宽），dx>0 向右（被小鲸鱼限制）
+  // 血条位置左右微调：dx<0 向左、dx>0 向右（向右被小鲸鱼限制）
+  // 位置只改 CSS：窗口已按 |dx|≤240 一次性留够宽度，松手 resize 会让
+  // 透明窗口闪一下 —— 那正是「拖位置时一闪一闪」的来源（BUG-001 同源）。
   function applyPillDx(v, save = true) {
     const num = Number(v)
     let dx = isFinite(num) ? Math.max(-240, Math.min(120, Math.round(num))) : 0
     dx = clampPillDx(dx, false)
     pillDx = dx
     setPillDxCss(dx)
-    // 注意：input 事件已经把 pillDx 更新过了，change 时 changed 恒为 false，
-    // 所以这里不能用 changed 判断 —— 只要落盘就必须让窗口跟着尺寸走。
-    // 拖动过程只改 CSS；松手才让窗口跟随（BUG-001：拖动中 setBounds 会卡死）。
-    if (save) scheduleResize()
     if (save) schedulePillDxSave()
   }
 
   // ---------------- 血条位置拖拽（仅水平方向） ----------------
   let pillDrag = null
   let pillDragRaf = null
-  let pillDragGrows = 0
 
   function startPillDrag(e) {
     if (e.button !== 0 || !pillOn) return
@@ -924,8 +958,16 @@
       appliedDx: pillDx, // 冗余记录，夹取基准统一读 CSS（见 clampPillDx 注释）
       acc: 0,
       moved: false,
+      // 血条夹取要同时守住窗口与屏幕两条边界：窗口可能有透明预留伸出屏幕外
+      winX: window.screenX || 0,
+      workArea: null,
     }
-    pillDragGrows = 0
+    window.electronAPI.getWindowBounds()
+      .then((b) => { if (pillDrag && typeof b.x === 'number') pillDrag.winX = b.x })
+      .catch(() => {})
+    window.electronAPI.getWorkArea()
+      .then((wa) => { if (pillDrag) pillDrag.workArea = wa })
+      .catch(() => {})
     if (pillBox) pillBox.classList.add('dshwv-pill-dragging')
     window.addEventListener('mousemove', onPillDragMove, { capture: true, passive: false })
     window.addEventListener('mouseup', onPillDragEnd, { capture: true, passive: false })
@@ -949,16 +991,8 @@
     let dx = clampPillDx(pillDrag.startDx + pillDrag.acc)
     pillDrag.curDx = dx
     setPillDxCss(dx)
-
-    // 左侧（镜像时是右侧）空间不够就按需加宽窗口：每次约 120px、整轮最多 4 次
-    // 绝不每帧 setBounds（BUG-001：DWM 每帧重建显存表面会卡死）
-    const pr = pillBox.getBoundingClientRect()
-    const mirrored = root.classList.contains('dshwv-left')
-    const nearEdge = mirrored ? pr.right > window.innerWidth - 16 : pr.left < 16
-    if (nearEdge && pillDragGrows < 4) {
-      pillDragGrows++
-      flushWindowResize(undefined, null, null, mirrored ? dx + 120 : dx - 120)
-    }
+    // 拖动过程中绝不改窗口尺寸：窗口宽度已按 |dx|≤240 留够（见 flushWindowResize），
+    // 早先"按需分步加宽"每次 setBounds 都会闪，拖一下能闪三四回（BUG-001 同源）。
   }
 
   function onPillDragEnd(e) {
@@ -978,7 +1012,14 @@
     pillDrag = null
     if (pillBox) pillBox.classList.remove('dshwv-pill-dragging')
 
-    if (moved) applyPillDx(finalDx, true) // 落盘 + 按最终位置把窗口收紧
+    if (moved) {
+      applyPillDx(finalDx, true) // 落盘（窗口已按最远位移静态留宽，这里只改 CSS + 存盘）
+    } else {
+      // 按住但没拖够 3px = 点击：拖动过程已经把 CSS 改掉了，必须拨回 pillDx，
+      // 否则 CSS 与已保存的 pillDx 不一致 —— 下次镜像翻转 / 配置回放时血条会
+      // 自己「跳回原位」，看起来像抽搐。
+      setPillDxCss(pillDx)
+    }
   }
 
   function applySnapThreshold(v, save = true) {
@@ -1243,6 +1284,9 @@
     // (bottom-right corner kept fixed so nothing visibly jumps), so the
     // drag clamp and corner snap behave correctly.
     const tightBounds = (await flushWindowResize(undefined, currentBounds, workArea)) || currentBounds
+    // 内容（鲸鱼+血条）在窗口内的边距：窗口的透明预留可以伸出屏幕，
+    // 拖拽夹取必须按内容算，否则鲸鱼会被自己的预留宽度顶在屏幕右边回不去
+    const margin = contentMargins(tightBounds)
 
     drag = {
       active: true,
@@ -1254,6 +1298,7 @@
       height: tightBounds.height,
       moved: false,
       workArea,
+      margin,
     }
 
     pendingX = tightBounds.x
@@ -1275,15 +1320,16 @@
     const dy = e.screenY - drag.startY
     if (dx * dx + dy * dy >= CLICK_SQ) drag.moved = true
 
+    const m = drag.margin || { left: 0, right: 0, top: 0 }
     pendingX = Math.round(
       Math.max(
-        drag.workArea.x,
-        Math.min(drag.workArea.x + drag.workArea.width - drag.width, drag.origX + dx)
+        drag.workArea.x - m.left,
+        Math.min(drag.workArea.x + drag.workArea.width - drag.width + m.right, drag.origX + dx)
       )
     )
     pendingY = Math.round(
       Math.max(
-        drag.workArea.y,
+        drag.workArea.y - m.top,
         Math.min(drag.workArea.y + drag.workArea.height - drag.height, drag.origY + dy)
       )
     )
@@ -1318,6 +1364,7 @@
     const workArea = drag.workArea
     const width = drag.width
     const height = drag.height
+    const m = drag.margin || { left: 0, right: 0, top: 0 }
 
     drag.active = false
     drag = null
@@ -1330,9 +1377,10 @@
     }
 
     // Snap Check based on distance to screen edges
-    const distanceLeft = pendingX - workArea.x
-    const distanceRight = (workArea.x + workArea.width) - (pendingX + width)
-    const distanceTop = pendingY - workArea.y
+    // 吸附距离按「内容」量（窗口的透明预留不算数），否则预留越宽越难贴边
+    const distanceLeft = (pendingX + m.left) - workArea.x
+    const distanceRight = (workArea.x + workArea.width) - (pendingX + width - m.right)
+    const distanceTop = (pendingY + m.top) - workArea.y
     const distanceBottom = (workArea.y + workArea.height) - (pendingY + height)
 
     let targetX = pendingX
@@ -1360,17 +1408,19 @@
       targetY = pendingY
     }
 
-    // Final safety clamp
-    targetX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, targetX))
-    targetY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, targetY))
+    // Final safety clamp（按内容边界：透明预留允许伸出屏幕）
+    targetX = Math.max(workArea.x - m.left, Math.min(workArea.x + workArea.width - width + m.right, targetX))
+    targetY = Math.max(workArea.y - m.top, Math.min(workArea.y + workArea.height - height, targetY))
 
     root.classList.toggle('dshwv-left', state.h === 'left')
     // 吸附到左边会整体镜像，血条的"屏幕方向 dx"要重新映射成本地 dx
     setPillDxCss(pillDx)
 
     window.electronAPI.setWindowPosition(targetX, targetY)
+    // 记录保存时的窗口宽：血条静态预留后窗口比内容宽，下次启动要用它把 x
+    // 换算回新宽度，贴着窗口右缘的鲸鱼才不会整体右移（见主进程 createMainWindow）
     window.electronAPI.saveConfig({
-      windowPos: { x: targetX, y: targetY, h: state.h, v: state.v },
+      windowPos: { x: targetX, y: targetY, w: width, h: state.h, v: state.v },
     })
   }
 
@@ -1416,7 +1466,12 @@
       turnCostCloseMs = typeof cfg.turnCostCloseMs === 'number' ? cfg.turnCostCloseMs : 5000
       snapThreshold = typeof cfg.snapThreshold === 'number' ? cfg.snapThreshold : 60
 
-      if (cfg.windowPos && cfg.windowPos.h) {
+      if (cfg.windowPos && cfg.windowPos.h === null) {
+        // 自由位置（h=null）：必须显式写回，否则 state.h 停在默认的 'right'，
+        // 下一次 flushWindowResize 会按右吸附把桌宠整只吸到屏幕右边缘 ——
+        // 存下来的自由位置等于白存。
+        state.h = null
+      } else if (cfg.windowPos && cfg.windowPos.h) {
         state.h = cfg.windowPos.h
         root.classList.toggle('dshwv-left', state.h === 'left')
         // 吸附模式与窗口 x 不一致时校正（配置被外部改过 / 历史遗留）：
@@ -1514,8 +1569,8 @@
         applyPillOn(newCfg.pillOn, false)
       }
       if (newCfg.pillDx !== undefined) {
+        // 位置只改 CSS：窗口已按最远位移留够宽度，无需 resize
         applyPillDx(newCfg.pillDx, false)
-        scheduleResize()
       }
       if (newCfg.testBalance !== undefined || newCfg.testUsage !== undefined || newCfg.testMode !== undefined) {
         // 测试面板改了自定义余额 / 开关测试模式 → 立刻反映到血条

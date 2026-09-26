@@ -222,9 +222,10 @@ html, body {
 .dshwv-pill {
   position: absolute;
   /* 右端固定停在鲸鱼左边界之前（0.36 < 鲸鱼起点 0.405），绝不压住小鲸鱼；
-     长度向左延伸，窗口宽度由 calculateWindowSize()/flushWindowResize() 按
-     同一公式同步加宽（pillOverhang），所以这里不再钳位 —— 否则 1.05x 之后
-     再拖滑条就"没有变化"了。 */
+     长度向左延伸。窗口宽度由 calculateWindowSize()/flushWindowResize() 按
+     「最长 1.6x + 最远位移 240px」一次性留够（pillOverhang(base,1.6,240)），
+     所以这里既不钳位、调长度/拖位置也绝不需要 resize —— 透明窗口 resize
+     会闪（BUG-001 同源），宁可常驻留宽也绝不在调整时动窗口尺寸。 */
   --dshw-pill-r: calc(var(--dshw-base) * 0.36);
   --dshw-pill-w: calc(var(--dshw-base) * 0.78 * var(--dshw-pill-len, 1));
   left: calc(var(--dshw-pill-r) - var(--dshw-pill-w) + var(--dshw-pill-dx, 0px));

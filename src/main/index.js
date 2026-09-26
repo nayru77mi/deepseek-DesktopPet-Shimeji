@@ -37,7 +37,14 @@ function pillOverhang(basePx, len, dx) {
   return Math.max(0, Math.ceil(basePx * (0.78 * n - 0.36) + 24 + d))
 }
 
-function calculateWindowSize(scale = 1.5, pillLen = 1, pillDx = 0) {
+// 血条可调范围的两个极端值：窗口按最坏情况一次性留够空间。
+const PILL_LEN_MAX = 1.6
+const PILL_DX_MAX = 240
+
+// 血条「当前配置」真正需要的尺寸 —— 也就是旧版本的窗口尺寸。
+// 新窗口比它宽/高的部分是纯透明预留，判断可见性、夹取拖拽都必须按内容算，
+// 否则透明边距会把鲸鱼能去的位置一路挤到屏幕右侧。
+function usedWindowSize(scale = 1.5, pillLen = 1, pillDx = 0) {
   const basePx = Math.round(180 * scale)
   return {
     width: basePx + Math.max(180, pillOverhang(basePx, pillLen, pillDx)),
@@ -45,7 +52,34 @@ function calculateWindowSize(scale = 1.5, pillLen = 1, pillDx = 0) {
   }
 }
 
-function getSafePosition(width, height, savedPos) {
+// 窗口尺寸只随缩放变化 —— 这是「调血条不闪烁」的关键：
+// 透明窗口每次 setBounds 都会让 Windows DWM 重建合成表面（BUG-001 同源），
+// 所以宁可窗口常驻大一圈，也绝不在用户调长度 / 拖位置时 resize。
+// 血条长度、位置因此只改 CSS，几何上永远装得下。
+function calculateWindowSize(scale = 1.5) {
+  const basePx = Math.round(180 * scale)
+  return {
+    width: basePx + Math.max(180, pillOverhang(basePx, PILL_LEN_MAX, PILL_DX_MAX)),
+    height: basePx + 200,
+  }
+}
+
+// 内容矩形（鲸鱼 + 血条真正画东西的区域）在屏幕上的绝对位置。
+// 透明预留在哪一侧取决于吸附方向：右吸附/自由时内容贴窗口右边，
+// 左吸附（整体镜像）时贴窗口左边。
+function contentRect(scale, pillLen, pillDx, h, bounds) {
+  const used = usedWindowSize(scale, pillLen, pillDx)
+  const usedW = Math.min(used.width, bounds.width)
+  const usedH = Math.min(used.height, bounds.height)
+  const tailX = bounds.width - usedW
+  const tailY = bounds.height - usedH
+  return h === 'left'
+    ? { x: bounds.x, y: bounds.y + tailY, width: usedW, height: usedH }
+    : { x: bounds.x + tailX, y: bounds.y + tailY, width: usedW, height: usedH }
+}
+
+// content = 需要校验的内容矩形（缺省按整窗算，兼容旧调用）
+function getSafePosition(width, height, savedPos, content) {
   const primaryDisplay = screen.getPrimaryDisplay()
   const workArea = primaryDisplay.workArea
 
@@ -56,16 +90,19 @@ function getSafePosition(width, height, savedPos) {
     return { x: defaultX, y: defaultY }
   }
 
-  // 必须有「大部分窗口面积」落在某块屏幕工作区内才算安全。
+  // 必须有「大部分内容面积」落在某块屏幕工作区内才算安全。
   // 旧实现只检查左上角一个点：窗口只要左上角在范围内就判定可见，换显示器、
   // 改分辨率或拖拽后可能出现「仅剩一小截在屏内、鲸鱼本体整个在外面」的情况，
   // 用户会以为桌宠消失了。按面积重叠判定可以彻底杜绝这类丢宠。
+  // 这里校验的是内容矩形而不是整窗 —— 窗口的透明预留允许伸出屏幕
+  // （否则鲸鱼会被自己的透明边距顶到屏幕右边，回不到左侧）。
+  const rect = content || { x: savedPos.x, y: savedPos.y, width, height }
   const MIN_OVERLAP = 0.6
   for (const display of screen.getAllDisplays()) {
     const wa = display.workArea
-    const overlapW = Math.min(savedPos.x + width, wa.x + wa.width) - Math.max(savedPos.x, wa.x)
-    const overlapH = Math.min(savedPos.y + height, wa.y + wa.height) - Math.max(savedPos.y, wa.y)
-    if (overlapW >= width * MIN_OVERLAP && overlapH >= height * MIN_OVERLAP) {
+    const overlapW = Math.min(rect.x + rect.width, wa.x + wa.width) - Math.max(rect.x, wa.x)
+    const overlapH = Math.min(rect.y + rect.height, wa.y + wa.height) - Math.max(rect.y, wa.y)
+    if (overlapW >= rect.width * MIN_OVERLAP && overlapH >= rect.height * MIN_OVERLAP) {
       return { x: savedPos.x, y: savedPos.y }
     }
   }
@@ -84,7 +121,9 @@ function keepWindowOnScreen() {
     if (!mainWindow || mainWindow.isDestroyed()) return
     try {
       const b = mainWindow.getBounds()
-      const next = getSafePosition(b.width, b.height, { x: b.x, y: b.y })
+      const cfg = readConfig()
+      const content = contentRect(cfg.scale || 1.5, cfg.pillLen, cfg.pillDx, cfg.windowPos && cfg.windowPos.h, b)
+      const next = getSafePosition(b.width, b.height, { x: b.x, y: b.y }, content)
       if (next.x !== b.x || next.y !== b.y) {
         mainWindow.setPosition(next.x, next.y)
         const edgeX = next.x + b.width / 2 < screen.getPrimaryDisplay().workArea.width / 2 ? 'left' : 'right'
@@ -105,8 +144,23 @@ function watchDisplays() {
 
 function createMainWindow() {
   const config = readConfig()
-  const { width, height } = calculateWindowSize(config.scale || 1.5, config.pillLen, config.pillDx)
-  const { x: winX, y: winY } = getSafePosition(width, height, config.windowPos)
+  const scale = config.scale || 1.5
+  const { width, height } = calculateWindowSize(scale)
+
+  // 自由位置（h=null）保存的是「旧窗口宽度」下的 x，而鲸鱼贴着窗口右缘：
+  // 新窗口按血条最坏情况留宽后必须把 x 左移同样的差值，鲸鱼在屏幕上的
+  // 位置才不会变（右吸附/左吸附会在渲染进程 init 里按窗口宽重新推导，不用管）。
+  let savedPos = config.windowPos
+  if (savedPos && !savedPos.h && typeof savedPos.x === 'number') {
+    const savedW = typeof savedPos.w === 'number'
+      ? savedPos.w
+      : usedWindowSize(scale, config.pillLen, config.pillDx).width
+    savedPos = { ...savedPos, x: savedPos.x + savedW - width }
+  }
+  const content = savedPos
+    ? contentRect(scale, config.pillLen, config.pillDx, savedPos.h, { x: savedPos.x, y: savedPos.y, width, height })
+    : null
+  const { x: winX, y: winY } = getSafePosition(width, height, savedPos, content)
 
   mainWindow = new BrowserWindow({
     x: winX,
@@ -358,12 +412,19 @@ ipcMain.on('set-window-bounds', (event, bounds) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win && !win.isDestroyed()) {
     const current = win.getBounds()
-    win.setBounds({
+    const next = {
       x: bounds.x !== undefined ? Math.round(bounds.x) : current.x,
       y: bounds.y !== undefined ? Math.round(bounds.y) : current.y,
       width: bounds.width !== undefined ? Math.round(bounds.width) : current.width,
       height: bounds.height !== undefined ? Math.round(bounds.height) : current.height,
-    })
+    }
+    // 尺寸没变就别调 setBounds：透明窗口每次 resize 都会闪一下（BUG-001 同源），
+    // 「没必要的 resize」是最容易被用户当成 bug 的那种闪烁。
+    if (next.x === current.x && next.y === current.y &&
+        next.width === current.width && next.height === current.height) {
+      return
+    }
+    win.setBounds(next)
   }
 })
 
