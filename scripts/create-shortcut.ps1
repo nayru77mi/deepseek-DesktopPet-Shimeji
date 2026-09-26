@@ -3,8 +3,11 @@ $iconPath = Join-Path $projectRoot "assets\icon.ico"
 $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
 $shortcutPath = Join-Path $desktopPath "DeepSeek余额小鲸鱼.lnk"
 
-# Target executable: prefer portable exe or win-unpacked exe
-$portableExe = Join-Path $projectRoot "dist\DeepSeek余额小鲸鱼 1.0.0.exe"
+# Target executable: prefer portable exe (pick the newest version) or win-unpacked exe
+$portableExe = Get-ChildItem (Join-Path $projectRoot "dist\DeepSeek余额小鲸鱼 *.exe") -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notlike '*Setup*' } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
 $unpackedExe = Join-Path $projectRoot "dist\win-unpacked\DeepSeek余额小鲸鱼.exe"
 $electronExe = Join-Path $projectRoot "node_modules\electron\dist\electron.exe"
 
@@ -12,8 +15,8 @@ $targetPath = ""
 $arguments = ""
 $workingDir = ""
 
-if (Test-Path $portableExe) {
-    $targetPath = $portableExe
+if ($portableExe) {
+    $targetPath = $portableExe.FullName
     $workingDir = $projectRoot
 } elseif (Test-Path $unpackedExe) {
     $targetPath = $unpackedExe
