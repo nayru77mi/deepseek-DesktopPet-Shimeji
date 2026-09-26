@@ -39,8 +39,9 @@
 
   function fmtAmount(a) {
     if (a >= 100) return a.toFixed(1)
-    if (a >= 0.1) return a.toFixed(2)
-    if (a >= 0.01) return a.toFixed(3)
+    if (a >= 1) return a.toFixed(2)
+    // 0.05 显示为 0.05 而不是 0.050；小于 0.01 保留 4 位（对齐视频里的 -0.0037）
+    if (a >= 0.01) return String(Number(a.toFixed(3)))
     return a.toFixed(4)
   }
 

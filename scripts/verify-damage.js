@@ -159,9 +159,15 @@ async function probe(evalJs, errors) {
 
 async function main() {
   const mode = process.argv[3] || 'verify'
+  const wantSettings = process.argv.includes('--settings')
   const list = JSON.parse(await httpGet(`http://127.0.0.1:${DEBUG_PORT}/json`))
-  const page = list.find((t) => t.type === 'page' && /index\.html/.test(t.url)) || list.find((t) => t.type === 'page')
-  if (!page) throw new Error('renderer target not found')
+  const page = wantSettings
+    ? list.find((t) => t.type === 'page' && /settings\.html/.test(t.url))
+    : list.find((t) => t.type === 'page' && /index\.html/.test(t.url)) || list.find((t) => t.type === 'page')
+  if (!page) {
+    throw new Error(wantSettings ? 'settings window not open — 先打开设置中心' : 'renderer target not found')
+  }
+  console.log('target:', page.url.split('/').pop())
 
   const { send, errors, close } = await connect(page.webSocketDebuggerUrl)
   await send('Runtime.enable')
