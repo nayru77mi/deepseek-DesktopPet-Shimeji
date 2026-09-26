@@ -403,7 +403,8 @@ CDP 连续采样 `getWindowBounds()` + 视口尺寸实测（修复前）：
    - 血条按住但没拖够 3px 视为点击，CSS 拨回已保存的 `pillDx`（否则 CSS 与 `pillDx` 不一致，下次镜像翻转 / 配置回放时血条自己"跳回去"）。
 
 #### 4. 验证
-`tmp_media/verify-geom.js`（CDP 连续采样，**只统计尺寸变化**）+ `tmp_media/verify-extra.js`（user32 真实鼠标拖拽）：
+- 入库工具：`node scripts/verify-resize.js 9223` —— 页面内连续采样视口尺寸与 `getWindowBounds()`（**只统计尺寸变化**），模拟调长度与拖位置两个动作，断言全程 0 次 resize，结束后自动复原长度/位置；
+- 另配两支未入库的临时脚本（CDP 连续采样 + `real-drag.ps1` 的 user32 真实鼠标拖拽），跑出下表结果：
 
 | 场景 | 结果 |
 | :--- | :--- |
