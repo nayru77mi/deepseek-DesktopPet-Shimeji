@@ -886,6 +886,22 @@
   // pillDx 要等松手才更新，用它当基准会让松手瞬间的重新夹取把位置弹回原点。
   //   clampWindow=false 时只夹"不压小鲸鱼"，窗口边界交给 resize 公式去提供空间
   //   （滑条一次就能拉到 -120；拖拽过程中仍需窗口边界夹取，因为窗口是分步加宽的）
+  // 鲸鱼「可见轮廓」边缘：图片本身四周有透明留白（assets/DSniang1.png 实测
+  // 610×610，不透明区从 x=45 开始 → 左侧 7.4% 是空的）。血条允许推进到留白里，
+  // 只要不碰到真正画了颜色的鲸鱼本体就不算压住 —— 右侧可拖范围因此多出一截
+  // （1.8x 下上限 +7 → +18），而肉眼看仍然是"贴着鲸鱼但没压上去"。
+  function whaleArtEdge(wr, mirrored) {
+    const pad = wr.width * (45 / 610)
+    return mirrored ? wr.right - pad : wr.left + pad
+  }
+
+  // 受击抖动会让鲸鱼朝血条方向位移，安全余量必须盖过它，否则抖动的瞬间
+  // 会压上去：普通受击 translateX(-3px)；暴击 translate(-5px) 但同时
+  // scale(.94) 会把边缘往回收 3% 盒宽（常规尺寸下两者基本抵消）。
+  function whaleShakeToward(wr) {
+    return Math.max(3, Math.ceil(5 - wr.width * 0.03))
+  }
+
   function clampPillDx(dx, clampWindow) {
     if (!pillBox) return dx
     const pr = pillBox.getBoundingClientRect()
@@ -911,12 +927,14 @@
       min = Math.round(minVp - kLeft)
       max = Math.round(maxVp - kRight)
     }
+    const artEdge = whaleArtEdge(wr, mirrored)
+    const shake = whaleShakeToward(wr)
     if (mirrored) {
       // 镜像：血条在小鲸鱼右侧，只能向右让开，不能向左压进去
-      min = Math.max(min, Math.round(wr.right + 8 - kLeft))
+      min = Math.max(min, Math.round(artEdge + shake + 8 - kLeft))
     } else {
       // 常规：血条在小鲸鱼左侧，只能向左让开，不能向右压进去
-      max = Math.min(max, Math.round(wr.left - 8 - kRight))
+      max = Math.min(max, Math.round(artEdge - shake - 8 - kRight))
     }
     // 几何退化（窗口尺寸与吸附模式不一致时 min > max）就放弃几何夹取
     if (min > max) return clampPillDxAbs(dx)

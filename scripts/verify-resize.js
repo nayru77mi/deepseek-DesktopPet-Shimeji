@@ -149,7 +149,10 @@ async function main() {
 
   const origLen = String(await evalJs(`document.getElementById('pill-len-range').value`))
   const origDx = await readPillDx()
-  console.log('original state: len=%s dx=%s', origLen, origDx)
+  // 顺带核对渲染进程与 config.json 是否一致（不一致说明有外部写入把配置冲掉了）
+  const cfgLen = await evalJs(`window.electronAPI.getConfig().then(c => (c && c.pillLen) !== undefined ? String(c.pillLen) : 'undefined')`)
+  console.log('original state: slider len=%s / config len=%s dx=%s', origLen, cfgLen, origDx)
+  if (origLen !== cfgLen) console.log('  ⚠ 滑条与配置不一致：以滑条为准执行，结束后会把两者一起复原')
   await evalJs(`(() => { const off = document.getElementById('balance-pill').classList.contains('dshwv-pill-off')
       if (off) document.getElementById('pill-toggle').click(); return true })()`)
 
@@ -173,6 +176,7 @@ async function main() {
   })()`)
   const lenLog = JSON.parse(lenRaw)
   console.log('\n[A] 调长度 1.0→1.6→…：窗口尺寸变化 %d 次 %s', lenLog.length, lenLog.length ? JSON.stringify(lenLog) : '')
+  // 复位，别把用户的桌宠留在实验状态（滑条与配置一起拉回原值）
   await evalJs(`(() => { const el = document.getElementById('pill-len-range'); el.value = ${JSON.stringify(origLen)}
       el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return true })()`)
   await evalJs(`(() => { const m = document.getElementById('menu-btn')
