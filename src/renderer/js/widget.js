@@ -701,7 +701,7 @@
     const dxUsed = forceDx === undefined || forceDx === null ? pillDx : forceDx
     const pillExtra = Math.max(
       180,
-      Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24 + Math.max(0, -dxUsed))
+      Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24 + Math.abs(dxUsed))
     )
     let winWidth = basePx + pillExtra
     let winHeight = basePx + 200
@@ -836,10 +836,12 @@
     if (save) saveConfig()
   }
 
-  function setPillDxCss(dx) {
-    const v = Math.round(dx)
-    root.style.setProperty('--dshw-pill-dx', v + 'px')
-    if (pillDxRange) pillDxRange.value = String(Math.max(-240, Math.min(40, v)))
+  function setPillDxCss(visualDx) {
+    const v = Math.round(visualDx)
+    // 配置与滑条存的是「屏幕视觉方向」；左吸附时整体镜像，写进 CSS 前取反
+    const local = root.classList.contains('dshwv-left') ? -v : v
+    root.style.setProperty('--dshw-pill-dx', local + 'px')
+    if (pillDxRange) pillDxRange.value = String(Math.max(-240, Math.min(120, v)))
     if (pillDxVal) pillDxVal.textContent = v + 'px'
   }
 
@@ -852,10 +854,49 @@
     }, 400)
   }
 
+  // 血条位置夹取：必须同时满足「不压小鲸鱼」与「不出窗口」，
+  // 且要考虑左吸附镜像 —— 镜像后血条跑到小鲸鱼右边，约束方向是反的。
+  // 基准必须读 CSS 里"当前实际生效"的值：拖拽中 CSS 每帧都在变，而模块变量
+  // pillDx 要等松手才更新，用它当基准会让松手瞬间的重新夹取把位置弹回原点。
+  //   clampWindow=false 时只夹"不压小鲸鱼"，窗口边界交给 resize 公式去提供空间
+  //   （滑条一次就能拉到 -120；拖拽过程中仍需窗口边界夹取，因为窗口是分步加宽的）
+  function clampPillDx(dx, clampWindow) {
+    if (!pillBox) return dx
+    const pr = pillBox.getBoundingClientRect()
+    if (!pr.width) return dx // 尚未完成布局，不做几何夹取
+    const wr = img.getBoundingClientRect()
+    const mirrored = root.classList.contains('dshwv-left')
+    const cssDx = parseFloat(getComputedStyle(root).getPropertyValue('--dshw-pill-dx'))
+    const rawCss = isFinite(cssDx) ? cssDx : 0
+    const applied = mirrored ? -rawCss : rawCss
+    const kLeft = pr.left - applied // 未偏移基准：rect 里已含 applied，先减掉
+    const kRight = pr.right - applied
+
+    let min = clampWindow === false ? -Infinity : Math.round(4 - kLeft) // 窗口左边界
+    let max = clampWindow === false ? Infinity : Math.round(window.innerWidth - 4 - kRight) // 窗口右边界
+    if (mirrored) {
+      // 镜像：血条在小鲸鱼右侧，只能向右让开，不能向左压进去
+      min = Math.max(min, Math.round(wr.right + 8 - kLeft))
+    } else {
+      // 常规：血条在小鲸鱼左侧，只能向左让开，不能向右压进去
+      max = Math.min(max, Math.round(wr.left - 8 - kRight))
+    }
+    // 几何退化（窗口尺寸与吸附模式不一致时 min > max）就放弃几何夹取
+    if (min > max) return clampPillDxAbs(dx)
+    return clampPillDxAbs(Math.max(min, Math.min(max, Math.round(dx))))
+  }
+
+  function clampPillDxAbs(v) {
+    const n = Number(v)
+    if (!isFinite(n)) return 0
+    return Math.max(-240, Math.min(120, Math.round(n)))
+  }
+
   // 血条位置左右微调：dx<0 向左（窗口需要加宽），dx>0 向右（被小鲸鱼限制）
   function applyPillDx(v, save = true) {
     const num = Number(v)
-    const dx = isFinite(num) ? Math.max(-240, Math.min(40, Math.round(num))) : 0
+    let dx = isFinite(num) ? Math.max(-240, Math.min(120, Math.round(num))) : 0
+    dx = clampPillDx(dx, false)
     pillDx = dx
     setPillDxCss(dx)
     // 注意：input 事件已经把 pillDx 更新过了，change 时 changed 恒为 false，
@@ -880,7 +921,7 @@
       startX: e.screenX,
       startDx: pillDx,
       curDx: pillDx,
-      appliedDx: pillDx, // 当前已经写进 CSS 的值，用来反推"未偏移基准"
+      appliedDx: pillDx, // 冗余记录，夹取基准统一读 CSS（见 clampPillDx 注释）
       acc: 0,
       moved: false,
     }
@@ -904,25 +945,19 @@
     pillDragRaf = null
     if (!pillDrag || !pillDrag.active) return
 
-    // 关键：rect 里已经含有"当前 dx"，必须先减掉才能得到未偏移基准，
-    // 否则 dxMin/dxMax 会把 dx 重复计入（实测只能拖动 6px 就卡住）
-    const applied = pillDrag.appliedDx
-    const pr = pillBox.getBoundingClientRect()
-    const wr = img.getBoundingClientRect()
-    const dxMin = Math.round(4 - (pr.left - applied)) // 不许出窗口左边界
-    const dxMax = Math.round((wr.left - 8) - (pr.right - applied)) // 不许压住小鲸鱼
-
-    let dx = pillDrag.startDx + pillDrag.acc
-    dx = Math.max(dxMin, Math.min(dxMax, dx))
+    // 夹取基准必须先减掉"当前已应用的 dx"，否则 dxMin/dxMax 会把 dx 重复计入
+    let dx = clampPillDx(pillDrag.startDx + pillDrag.acc)
     pillDrag.curDx = dx
     setPillDxCss(dx)
-    pillDrag.appliedDx = dx
 
-    // 左侧空间不够就按需加宽窗口：每次约 120px、整轮最多 4 次
+    // 左侧（镜像时是右侧）空间不够就按需加宽窗口：每次约 120px、整轮最多 4 次
     // 绝不每帧 setBounds（BUG-001：DWM 每帧重建显存表面会卡死）
-    if (pr.left < 16 && pillDragGrows < 4) {
+    const pr = pillBox.getBoundingClientRect()
+    const mirrored = root.classList.contains('dshwv-left')
+    const nearEdge = mirrored ? pr.right > window.innerWidth - 16 : pr.left < 16
+    if (nearEdge && pillDragGrows < 4) {
       pillDragGrows++
-      flushWindowResize(undefined, null, null, dx - 120)
+      flushWindowResize(undefined, null, null, mirrored ? dx + 120 : dx - 120)
     }
   }
 
@@ -1330,6 +1365,8 @@
     targetY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, targetY))
 
     root.classList.toggle('dshwv-left', state.h === 'left')
+    // 吸附到左边会整体镜像，血条的"屏幕方向 dx"要重新映射成本地 dx
+    setPillDxCss(pillDx)
 
     window.electronAPI.setWindowPosition(targetX, targetY)
     window.electronAPI.saveConfig({
@@ -1382,6 +1419,14 @@
       if (cfg.windowPos && cfg.windowPos.h) {
         state.h = cfg.windowPos.h
         root.classList.toggle('dshwv-left', state.h === 'left')
+        // 吸附模式与窗口 x 不一致时校正（配置被外部改过 / 历史遗留）：
+        // 否则左吸附却沿用右锚定的 x，血条会被推出窗口
+        try {
+          const b = await window.electronAPI.getWindowBounds()
+          const wa = await window.electronAPI.getWorkArea()
+          const wantX = state.h === 'left' ? wa.x : wa.x + wa.width - b.width
+          if (Math.abs(b.x - wantX) > 2) window.electronAPI.setWindowPosition(wantX, b.y)
+        } catch (err) {}
       }
 
       root.style.setProperty('--dshw-scale', String(state.scale))

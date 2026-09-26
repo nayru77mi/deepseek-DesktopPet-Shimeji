@@ -32,7 +32,8 @@ let tray = null
 // left = 0.36*base - 0.78*base*len + dx 保持一致，否则窗口不够宽会把血条左边裁掉
 function pillOverhang(basePx, len, dx) {
   const n = Math.max(0.6, Math.min(1.6, Number(len) || 1))
-  const d = Math.max(0, -Math.round(Number(dx) || 0)) // 只有向左微调才需要额外空间
+  // 左右吸附镜像时，dx 的"需要加宽"方向相反，取绝对值统一覆盖（多出的透明边距无害）
+  const d = Math.abs(Math.round(Number(dx) || 0))
   return Math.max(0, Math.ceil(basePx * (0.78 * n - 0.36) + 24 + d))
 }
 

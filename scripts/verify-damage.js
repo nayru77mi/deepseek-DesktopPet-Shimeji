@@ -219,6 +219,10 @@ async function main() {
     const sx = info.x
     const sy = info.y
     await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: sx, y: sy, button: 'left', buttons: 1, clickCount: 1 })
+    await sleep(60)
+    const started = await evalJs(
+      "JSON.stringify({ dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging'), label: document.getElementById('pill-dx-val').textContent })"
+    )
     const steps = 10
     for (let i = 1; i <= steps; i++) {
       await send('Input.dispatchMouseEvent', {
@@ -239,7 +243,7 @@ async function main() {
           pillLeft: Math.round(b.left), pillRight: Math.round(b.right), winW: window.innerWidth,
           gap: Math.round(w.left - b.right), inWindow: b.left >= 0, dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging') })
       })()`)
-    console.log('dragged by', targetDx, '->', after)
+    console.log('dragged by', targetDx, '| after-press:', started, '->', after)
     close()
     return
   }
