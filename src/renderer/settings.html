@@ -169,6 +169,37 @@
   <div class="container">
     <h2>🐋 DeepSeek 小鲸鱼 - 设置中心</h2>
 
+    <!-- 测试版面板 -->
+    <div class="card" style="border-color: rgba(224, 67, 63, 0.35);">
+      <div class="card-title"><span>🧪 测试版面板</span></div>
+
+      <div class="form-group">
+        <label class="checkbox-row">
+          <input id="chk-test-mode" type="checkbox">
+          <span>启用测试模式（自定义余额，不请求 DeepSeek 接口）</span>
+        </label>
+      </div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="input-test-balance">自定义余额（¥）</label>
+        <div class="input-row">
+          <input id="input-test-balance" type="number" min="0" step="0.01" value="100" style="max-width: 130px;">
+          <button id="btn-apply-balance" type="button" class="btn-sm">应用余额并清零已用</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="input-test-amount">单次扣费金额（¥）</label>
+        <div class="input-row">
+          <input id="input-test-amount" type="number" min="0.0001" step="0.001" value="0.05" style="max-width: 130px;">
+          <button id="btn-cost-normal" type="button" class="btn-sm">💥 普通扣费</button>
+          <button id="btn-cost-crit" type="button" class="btn-sm">⚡ 暴击扣费</button>
+          <button id="btn-reset-usage" type="button" class="btn-sm">清零已用</button>
+        </div>
+        <div class="help-text" id="test-status">加载中…</div>
+      </div>
+    </div>
+
     <!-- API 凭据配置 -->
     <div class="card">
       <div class="card-title">

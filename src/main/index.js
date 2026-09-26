@@ -4,6 +4,14 @@ const { readConfig, writeConfig } = require('./store')
 const { getBalance, clearBalanceCache } = require('./balance-service')
 const { startListener, stopListener, getLastTurn, handleTurnEvent } = require('./cost-listener')
 
+// 便捷入口：--test 以测试模式启动（自定义余额 + 扣费演练，不请求接口）。
+// 只对本次启动生效，不写入配置 —— 否则普通快捷方式也会被带偏。
+const TEST_ARGV = process.argv.includes('--test')
+
+function isTestMode(cfg) {
+  return TEST_ARGV || !!(cfg && cfg.testMode)
+}
+
 // Low memory & high performance switches
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=64')
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -243,7 +251,9 @@ function createTray() {
 
 // IPC Handlers
 ipcMain.handle('get-config', () => {
-  return readConfig()
+  const cfg = readConfig()
+  // --test 启动时让设置面板的测试开关显示为开启（不落盘）
+  return TEST_ARGV ? { ...cfg, testMode: true } : cfg
 })
 
 ipcMain.handle('save-config', (event, partial) => {
@@ -277,8 +287,45 @@ ipcMain.handle('get-last-turn', () => {
   return getLastTurn()
 })
 
-ipcMain.handle('test-cost', (event, amount) => {
-  handleTurnEvent({ amount: Number(amount) || 0.1, turn: 1, end: true })
+// 向两个窗口广播配置片段（绝不回声给发起方，防 BUG-002 递归）
+function broadcastConfig(partial, sender) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('config-changed', partial)
+  if (settingsWindow && !settingsWindow.isDestroyed() && sender !== settingsWindow.webContents) {
+    settingsWindow.webContents.send('config-changed', partial)
+  }
+}
+
+ipcMain.handle('test-cost', (event, amount, force) => {
+  handleTurnEvent({
+    amount: Number(amount) || 0.1,
+    turn: 1,
+    end: true,
+    force: force === 'crit' || force === 'normal' ? force : null,
+  })
+  return { ok: true }
+})
+
+// ---------------- 测试版面板 ----------------
+ipcMain.handle('set-test-mode', (event, on) => {
+  writeConfig({ testMode: !!on })
+  clearBalanceCache()
+  broadcastConfig({ testMode: !!on }, event.sender)
+  return { ok: true, testMode: !!on }
+})
+
+ipcMain.handle('set-test-balance', (event, balance) => {
+  const b = Number(balance)
+  if (!isFinite(b) || b < 0) return { ok: false, error: '余额必须是 ≥ 0 的数字' }
+  writeConfig({ testBalance: b, testUsage: 0 })
+  clearBalanceCache()
+  broadcastConfig({ testBalance: b, testUsage: 0 }, event.sender)
+  return { ok: true, testBalance: b }
+})
+
+ipcMain.handle('reset-test-usage', (event) => {
+  writeConfig({ testUsage: 0 })
+  clearBalanceCache()
+  broadcastConfig({ testUsage: 0 }, event.sender)
   return { ok: true }
 })
 
@@ -340,6 +387,24 @@ ipcMain.on('close-app', () => {
   app.quit()
 })
 
+// 测试模式：每笔扣费直接扣自定义余额并累加今日已用，血条实时下降
+function applyTestCost(turnData) {
+  try {
+    if (!turnData) return
+    const cfg = readConfig()
+    if (!isTestMode(cfg)) return
+    const amount = Number(turnData.amount)
+    if (!isFinite(amount) || amount <= 0) return
+    const bal = Number(cfg.testBalance)
+    const nextBal = Math.max(0, (isFinite(bal) ? bal : 0) - amount)
+    const nextUsage = (Number(cfg.testUsage) || 0) + amount
+    writeConfig({ testBalance: nextBal, testUsage: nextUsage })
+    broadcastConfig({ testBalance: nextBal, testUsage: nextUsage }, null)
+  } catch (err) {
+    console.error('[TestMode] apply cost failed:', err)
+  }
+}
+
 app.whenReady().then(() => {
   const config = readConfig()
   createMainWindow()
@@ -348,6 +413,8 @@ app.whenReady().then(() => {
 
   // Start turn cost local listener
   startListener(config.listenerPort || 37189, (turnData) => {
+    // 先落账（测试模式扣余额），再广播 —— 否则前端刷新会读到旧值慢一拍
+    applyTestCost(turnData)
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('turn-cost-updated', turnData)
     }

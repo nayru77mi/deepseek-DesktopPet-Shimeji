@@ -39,6 +39,8 @@ function recordDirect(turn, d) {
     amount: cost,
     tokens: Number(d.tokens) || 0,
     cache: typeof d.cache === 'number' ? d.cache : null,
+    // 测试按钮可强制分级（普通 / 暴击），正常外部事件为 null 走金额分级
+    force: d.force === 'crit' || d.force === 'normal' ? d.force : null,
     ts: Date.now(),
   }
   lastTurnSeq++

@@ -12,6 +12,28 @@
   const btnSave = document.getElementById('btn-save')
   const toast = document.getElementById('toast')
 
+  // 测试版面板
+  const chkTestMode = document.getElementById('chk-test-mode')
+  const inputTestBalance = document.getElementById('input-test-balance')
+  const inputTestAmount = document.getElementById('input-test-amount')
+  const btnApplyBalance = document.getElementById('btn-apply-balance')
+  const btnCostNormal = document.getElementById('btn-cost-normal')
+  const btnCostCrit = document.getElementById('btn-cost-crit')
+  const btnResetUsage = document.getElementById('btn-reset-usage')
+  const testStatus = document.getElementById('test-status')
+
+  const testCfg = { testMode: false, testBalance: 100, testUsage: 0 }
+
+  function renderTestStatus() {
+    if (!testStatus) return
+    const bal = Number(testCfg.testBalance)
+    const used = Number(testCfg.testUsage) || 0
+    const ratio = bal + used > 0 ? bal / (bal + used) : 0
+    testStatus.textContent = testCfg.testMode
+      ? `🧪 测试模式开启 · 余额 ¥${isFinite(bal) ? bal.toFixed(2) : '--'} · 今日已用 ¥${used.toFixed(2)} · 血量 ${(ratio * 100).toFixed(0)}%`
+      : '测试模式已关闭 —— 勾选上方开关即可用自定义余额演练扣费'
+  }
+
   function showToast(msg) {
     toast.textContent = msg
     toast.classList.add('show')
@@ -35,10 +57,91 @@
       chkAlwaysOnTop.checked = config.alwaysOnTop !== false
       chkOpenAtLogin.checked = !!config.openAtLogin
       inputListenerPort.value = config.listenerPort || 37189
+      testCfg.testMode = !!config.testMode
+      testCfg.testBalance = config.testBalance
+      testCfg.testUsage = config.testUsage
+      chkTestMode.checked = testCfg.testMode
+      if (isFinite(Number(config.testBalance))) inputTestBalance.value = Number(config.testBalance)
+      renderTestStatus()
     }
   } catch (err) {
     console.error('Failed to load config:', err)
   }
+
+  // 测试面板：主进程扣账后会广播最新余额，这里同步显示
+  window.electronAPI.onConfigChanged((cfg) => {
+    if (!cfg) return
+    if (cfg.testBalance !== undefined) testCfg.testBalance = cfg.testBalance
+    if (cfg.testUsage !== undefined) testCfg.testUsage = cfg.testUsage
+    if (cfg.testMode !== undefined) {
+      testCfg.testMode = !!cfg.testMode
+      if (chkTestMode) chkTestMode.checked = !!cfg.testMode
+    }
+    renderTestStatus()
+  })
+
+  chkTestMode.addEventListener('change', async () => {
+    try {
+      const r = await window.electronAPI.setTestMode(chkTestMode.checked)
+      testCfg.testMode = !!r.testMode
+      renderTestStatus()
+      showToast(r.testMode ? '🧪 测试模式已开启' : '已关闭测试模式（回到真实接口）')
+    } catch (err) {
+      alert('操作失败: ' + err.message)
+    }
+  })
+
+  btnApplyBalance.addEventListener('click', async () => {
+    try {
+      const r = await window.electronAPI.setTestBalance(Number(inputTestBalance.value))
+      if (!r.ok) {
+        alert(r.error || '设置失败')
+        return
+      }
+      testCfg.testMode = true
+      testCfg.testBalance = r.testBalance
+      testCfg.testUsage = 0
+      chkTestMode.checked = true
+      renderTestStatus()
+      showToast(`✅ 余额已设为 ¥${r.testBalance.toFixed(2)}，今日已用清零`)
+    } catch (err) {
+      alert('操作失败: ' + err.message)
+    }
+  })
+
+  async function doTestCost(force) {
+    const a = Number(inputTestAmount.value)
+    if (!isFinite(a) || a <= 0) {
+      alert('扣费金额必须 > 0')
+      return
+    }
+    try {
+      if (!chkTestMode.checked) {
+        await window.electronAPI.setTestMode(true)
+        chkTestMode.checked = true
+        testCfg.testMode = true
+      }
+      await window.electronAPI.testCost(a, force)
+      showToast(force === 'crit' ? `⚡ 暴击扣费 ¥${a}` : `💥 普通扣费 ¥${a}`)
+      setTimeout(renderTestStatus, 300)
+    } catch (err) {
+      alert('测试失败: ' + err.message)
+    }
+  }
+
+  btnCostNormal.addEventListener('click', () => doTestCost('normal'))
+  btnCostCrit.addEventListener('click', () => doTestCost('crit'))
+
+  btnResetUsage.addEventListener('click', async () => {
+    try {
+      await window.electronAPI.resetTestUsage()
+      testCfg.testUsage = 0
+      renderTestStatus()
+      showToast('🧹 今日已用已清零')
+    } catch (err) {
+      alert('操作失败: ' + err.message)
+    }
+  })
 
   // Test Balance
   btnTestBalance.addEventListener('click', async () => {

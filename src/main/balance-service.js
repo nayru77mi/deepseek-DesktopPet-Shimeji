@@ -103,6 +103,21 @@ async function getBalance(forceRefresh = false) {
   const config = readConfig()
   const isPeak = isPeakTime(Math.floor(now / 1000))
 
+  // 测试模式：不请求接口，直接用自定义余额与今日已用（每次现算，绕过缓存）
+  // --test 启动参数或配置里的 testMode 均可触发
+  if (config.testMode || process.argv.includes('--test')) {
+    const bal = Number(config.testBalance)
+    return {
+      ok: true,
+      totalBalance: isFinite(bal) ? bal : 0,
+      currency: 'CNY',
+      updatedAt: new Date().toISOString(),
+      todayUsage: Number(config.testUsage) || 0,
+      isPeak,
+      usageMode: 'test',
+    }
+  }
+
   if (!forceRefresh && balanceCache && now - balanceCache.ts < BALANCE_TTL_MS) {
     return {
       ...balanceCache.data,

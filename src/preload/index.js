@@ -23,5 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openSettings: () => ipcRenderer.send('open-settings'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
   closeApp: () => ipcRenderer.send('close-app'),
-  testCost: (amount) => ipcRenderer.invoke('test-cost', amount),
+  testCost: (amount, force) => ipcRenderer.invoke('test-cost', amount, force),
+  setTestMode: (on) => ipcRenderer.invoke('set-test-mode', on),
+  setTestBalance: (balance) => ipcRenderer.invoke('set-test-balance', balance),
+  resetTestUsage: () => ipcRenderer.invoke('reset-test-usage'),
 })

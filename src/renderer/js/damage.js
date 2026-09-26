@@ -26,8 +26,9 @@
     return document.getElementById('combo-badge')
   }
 
-  // 分级：缓存未命中（cache=0 且 token 量不小）视为暴击
+  // 分级：缓存未命中（cache=0 且 token 量不小）视为暴击；测试按钮可强制指定
   function tierOf(amount, data) {
+    if (data && (data.force === 'crit' || data.force === 'normal')) return data.force
     const cache = data ? data.cache : null
     const tokens = (data && Number(data.tokens)) || 0
     const cacheMiss = typeof cache === 'number' && cache === 0 && tokens >= 800
@@ -151,14 +152,15 @@
     if (!enabled || !data) return
     const amount = Number(data.amount)
     if (!isFinite(amount) || amount <= 0) return
+    const force = data.force === 'crit' || data.force === 'normal' ? data.force : null
 
     if (pending.length >= QUEUE_MAX) {
       const tail = pending[pending.length - 1]
       tail.amount += amount
       tail.merged = true
-      tail.tier = tierOf(tail.amount, null)
+      tail.tier = tierOf(tail.amount, { force: tail.force })
     } else {
-      pending.push({ amount, tier: tierOf(amount, data), merged: false })
+      pending.push({ amount, tier: tierOf(amount, data), force, merged: false })
     }
     schedule()
   }
