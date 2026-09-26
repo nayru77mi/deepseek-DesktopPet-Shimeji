@@ -37,6 +37,10 @@
   const damageToggle = document.getElementById('damage-toggle')
   const pillLenRange = document.getElementById('pill-len-range')
   const pillLenVal = document.getElementById('pill-len-val')
+  const pillToggle = document.getElementById('pill-toggle')
+  const pillDxRange = document.getElementById('pill-dx-range')
+  const pillDxVal = document.getElementById('pill-dx-val')
+  const pillBox = document.getElementById('balance-pill')
   const snapInput = document.getElementById('snap-range')
   const snapVal = document.getElementById('snap-val')
   const turnCostToggle = document.getElementById('turn-cost-toggle')
@@ -80,6 +84,8 @@
   let bubbleOn = true
   let damageOn = true
   let pillLen = 1
+  let pillOn = true
+  let pillDx = 0
   let snapThreshold = 60
   let turnCostOn = true
   let turnCostCloseMs = 5000
@@ -573,6 +579,8 @@
         bubbleOn: bubbleOn,
         damageOn: damageOn,
         pillLen: pillLen,
+        pillOn: pillOn,
+        pillDx: pillDx,
         turnCostOn: turnCostOn,
         turnCostCloseMs: turnCostCloseMs,
         snapThreshold: snapThreshold,
@@ -687,10 +695,14 @@
     return Math.ceil(rootH + 25 - menuBox.offsetTop)
   }
 
-  async function flushWindowResize(seq, givenBounds, givenWorkArea) {
+  async function flushWindowResize(seq, givenBounds, givenWorkArea, forceDx) {
     const basePx = Math.round(180 * state.scale)
-    // 血条变长要向左伸出 root，窗口必须同步加宽，否则血条左边被窗口裁掉
-    const pillExtra = Math.max(180, Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24))
+    // 血条变长 / 向左微调都要向左伸出 root，窗口必须同步加宽，否则血条被裁
+    const dxUsed = forceDx === undefined || forceDx === null ? pillDx : forceDx
+    const pillExtra = Math.max(
+      180,
+      Math.ceil(basePx * (0.78 * pillLen - 0.36) + 24 + Math.max(0, -dxUsed))
+    )
     let winWidth = basePx + pillExtra
     let winHeight = basePx + 200
     // While the menu is open, never shrink the window below the menu size,
@@ -814,6 +826,124 @@
       pillLenSaveTimer = null
       saveConfig()
     }, 400)
+  }
+
+  // 菜单「血条」开关：只切 class，不移除节点（避免回流）
+  function applyPillOn(v, save = true) {
+    pillOn = v !== false
+    if (pillToggle) pillToggle.checked = pillOn
+    if (pillBox) pillBox.classList.toggle('dshwv-pill-off', !pillOn)
+    if (save) saveConfig()
+  }
+
+  function setPillDxCss(dx) {
+    const v = Math.round(dx)
+    root.style.setProperty('--dshw-pill-dx', v + 'px')
+    if (pillDxRange) pillDxRange.value = String(Math.max(-240, Math.min(40, v)))
+    if (pillDxVal) pillDxVal.textContent = v + 'px'
+  }
+
+  let pillDxSaveTimer = null
+  function schedulePillDxSave() {
+    if (pillDxSaveTimer) clearTimeout(pillDxSaveTimer)
+    pillDxSaveTimer = setTimeout(() => {
+      pillDxSaveTimer = null
+      saveConfig()
+    }, 400)
+  }
+
+  // 血条位置左右微调：dx<0 向左（窗口需要加宽），dx>0 向右（被小鲸鱼限制）
+  function applyPillDx(v, save = true) {
+    const num = Number(v)
+    const dx = isFinite(num) ? Math.max(-240, Math.min(40, Math.round(num))) : 0
+    pillDx = dx
+    setPillDxCss(dx)
+    // 注意：input 事件已经把 pillDx 更新过了，change 时 changed 恒为 false，
+    // 所以这里不能用 changed 判断 —— 只要落盘就必须让窗口跟着尺寸走。
+    // 拖动过程只改 CSS；松手才让窗口跟随（BUG-001：拖动中 setBounds 会卡死）。
+    if (save) scheduleResize()
+    if (save) schedulePillDxSave()
+  }
+
+  // ---------------- 血条位置拖拽（仅水平方向） ----------------
+  let pillDrag = null
+  let pillDragRaf = null
+  let pillDragGrows = 0
+
+  function startPillDrag(e) {
+    if (e.button !== 0 || !pillOn) return
+    e.preventDefault()
+    e.stopPropagation()
+    window.electronAPI.setIgnoreMouseEvents(false)
+    pillDrag = {
+      active: true,
+      startX: e.screenX,
+      startDx: pillDx,
+      curDx: pillDx,
+      appliedDx: pillDx, // 当前已经写进 CSS 的值，用来反推"未偏移基准"
+      acc: 0,
+      moved: false,
+    }
+    pillDragGrows = 0
+    if (pillBox) pillBox.classList.add('dshwv-pill-dragging')
+    window.addEventListener('mousemove', onPillDragMove, { capture: true, passive: false })
+    window.addEventListener('mouseup', onPillDragEnd, { capture: true, passive: false })
+  }
+
+  function onPillDragMove(e) {
+    if (!pillDrag || !pillDrag.active) return
+    e.preventDefault()
+    e.stopPropagation()
+    // 屏幕坐标累加：拖动途中窗口可能加宽、视口原点会平移，位移量本身不受影响
+    pillDrag.acc = e.screenX - pillDrag.startX
+    if (!pillDrag.moved && Math.abs(pillDrag.acc) > 3) pillDrag.moved = true
+    if (!pillDragRaf) pillDragRaf = requestAnimationFrame(pillDragFrame)
+  }
+
+  function pillDragFrame() {
+    pillDragRaf = null
+    if (!pillDrag || !pillDrag.active) return
+
+    // 关键：rect 里已经含有"当前 dx"，必须先减掉才能得到未偏移基准，
+    // 否则 dxMin/dxMax 会把 dx 重复计入（实测只能拖动 6px 就卡住）
+    const applied = pillDrag.appliedDx
+    const pr = pillBox.getBoundingClientRect()
+    const wr = img.getBoundingClientRect()
+    const dxMin = Math.round(4 - (pr.left - applied)) // 不许出窗口左边界
+    const dxMax = Math.round((wr.left - 8) - (pr.right - applied)) // 不许压住小鲸鱼
+
+    let dx = pillDrag.startDx + pillDrag.acc
+    dx = Math.max(dxMin, Math.min(dxMax, dx))
+    pillDrag.curDx = dx
+    setPillDxCss(dx)
+    pillDrag.appliedDx = dx
+
+    // 左侧空间不够就按需加宽窗口：每次约 120px、整轮最多 4 次
+    // 绝不每帧 setBounds（BUG-001：DWM 每帧重建显存表面会卡死）
+    if (pr.left < 16 && pillDragGrows < 4) {
+      pillDragGrows++
+      flushWindowResize(undefined, null, null, dx - 120)
+    }
+  }
+
+  function onPillDragEnd(e) {
+    if (!pillDrag || !pillDrag.active) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    window.removeEventListener('mousemove', onPillDragMove, { capture: true })
+    window.removeEventListener('mouseup', onPillDragEnd, { capture: true })
+    if (pillDragRaf) {
+      cancelAnimationFrame(pillDragRaf)
+      pillDragRaf = null
+    }
+
+    const finalDx = pillDrag.curDx
+    const moved = pillDrag.moved
+    pillDrag = null
+    if (pillBox) pillBox.classList.remove('dshwv-pill-dragging')
+
+    if (moved) applyPillDx(finalDx, true) // 落盘 + 按最终位置把窗口收紧
   }
 
   function applySnapThreshold(v, save = true) {
@@ -1012,6 +1142,18 @@
   if (pillLenRange) {
     pillLenRange.addEventListener('input', () => applyPillLen(pillLenRange.value, true))
     pillLenRange.addEventListener('change', () => applyPillLen(pillLenRange.value, true))
+  }
+  if (pillToggle) {
+    pillToggle.addEventListener('change', () => applyPillOn(pillToggle.checked, true))
+  }
+  if (pillDxRange) {
+    // 拖滑条过程中只改 CSS（松手 change 才 resize + 落盘）
+    pillDxRange.addEventListener('input', () => applyPillDx(pillDxRange.value, false))
+    pillDxRange.addEventListener('change', () => applyPillDx(pillDxRange.value, true))
+  }
+  if (pillBox) {
+    pillBox.addEventListener('mousedown', startPillDrag)
+    pillBox.addEventListener('mouseenter', () => window.electronAPI.setIgnoreMouseEvents(false))
   }
   snapInput.addEventListener('input', () => {
     const v = Math.round(Number(snapInput.value) || 0)
@@ -1253,6 +1395,8 @@
       bubbleToggle.checked = bubbleOn
       if (damageToggle) damageToggle.checked = damageOn
       applyPillLen(cfg.pillLen === undefined ? 1 : cfg.pillLen, false)
+      applyPillOn(cfg.pillOn !== false, false)
+      applyPillDx(cfg.pillDx === undefined ? 0 : cfg.pillDx, false)
       if (snapInput) snapInput.value = String(snapThreshold)
       if (snapVal) snapVal.textContent = snapThreshold === 0 ? '关闭' : `${snapThreshold}px`
       turnCostToggle.checked = turnCostOn
@@ -1320,6 +1464,13 @@
       }
       if (newCfg.pillLen !== undefined) {
         applyPillLen(newCfg.pillLen, false)
+      }
+      if (newCfg.pillOn !== undefined) {
+        applyPillOn(newCfg.pillOn, false)
+      }
+      if (newCfg.pillDx !== undefined) {
+        applyPillDx(newCfg.pillDx, false)
+        scheduleResize()
       }
       if (newCfg.testBalance !== undefined || newCfg.testUsage !== undefined || newCfg.testMode !== undefined) {
         // 测试面板改了自定义余额 / 开关测试模式 → 立刻反映到血条

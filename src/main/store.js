@@ -28,6 +28,8 @@ const DEFAULT_CONFIG = {
   bubbleOn: true,
   damageOn: true,
   pillLen: 1,
+  pillOn: true,
+  pillDx: 0,
   testMode: false,
   testBalance: 100,
   testUsage: 0,

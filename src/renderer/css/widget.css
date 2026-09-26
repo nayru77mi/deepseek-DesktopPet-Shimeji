@@ -227,7 +227,7 @@ html, body {
      再拖滑条就"没有变化"了。 */
   --dshw-pill-r: calc(var(--dshw-base) * 0.36);
   --dshw-pill-w: calc(var(--dshw-base) * 0.78 * var(--dshw-pill-len, 1));
-  left: calc(var(--dshw-pill-r) - var(--dshw-pill-w));
+  left: calc(var(--dshw-pill-r) - var(--dshw-pill-w) + var(--dshw-pill-dx, 0px));
   width: var(--dshw-pill-w);
   bottom: calc(var(--dshw-base) * 0.05);
   height: calc(var(--dshw-base) * 0.118);
@@ -240,12 +240,30 @@ html, body {
   gap: calc(var(--dshw-base) * .02);
   padding: 0 calc(var(--dshw-base) * .035);
   overflow: hidden;
-  pointer-events: none;
+  /* 可按住左右拖动微调位置（穿透由 root 的 mouseenter 统一接管） */
+  pointer-events: auto;
+  cursor: ew-resize;
   z-index: 4;
   font-size: calc(var(--dshw-base) * .055);
   line-height: 1;
   color: #eaf0ff;
   letter-spacing: .02em;
+  transition: opacity .18s ease, visibility .18s ease;
+  touch-action: none;
+}
+
+/* 菜单「血条」开关关闭时隐藏（保持布局，不触发回流） */
+.dshwv-pill.dshwv-pill-off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 拖动微调中：关掉过渡避免跟手延迟，并加重阴影给出"抓起来了"的反馈 */
+.dshwv-pill.dshwv-pill-dragging {
+  cursor: grabbing;
+  transition: none;
+  box-shadow: 0 calc(var(--dshw-base) * .016) calc(var(--dshw-base) * .05) rgba(0, 0, 0, .55);
 }
 
 /* 左吸附时根节点整体镜像，胶囊二次镜像以还原文字方向 */

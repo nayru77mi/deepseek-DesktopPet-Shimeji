@@ -207,7 +207,43 @@ async function main() {
     return
   }
 
-  // 渲染层截图（不经屏幕合成，不受旧帧污染）：
+  // 血条水平拖拽测试：
+  // node scripts/verify-damage.js 9223 drag <目标dx>   （用 CDP Input 模拟真实鼠标）
+  if (mode === 'drag') {
+    const targetDx = Number(process.argv[4]) || -80
+    // Input.dispatchMouseEvent 用的是「视口坐标」（相对页面左上角），不是屏幕坐标
+    const info = JSON.parse(
+      await evalJs(`JSON.stringify((() => { const b = document.getElementById('balance-pill').getBoundingClientRect()
+                    return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) } })())`)
+    )
+    const sx = info.x
+    const sy = info.y
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: sx, y: sy, button: 'left', buttons: 1, clickCount: 1 })
+    const steps = 10
+    for (let i = 1; i <= steps; i++) {
+      await send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: Math.round(sx + (targetDx * i) / steps),
+        y: sy,
+        button: 'left',
+        buttons: 1,
+      })
+      await sleep(16)
+    }
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: Math.round(sx + targetDx), y: sy, button: 'left', buttons: 0, clickCount: 1 })
+    await sleep(500)
+    const after = await evalJs(`(() => { const b = document.getElementById('balance-pill').getBoundingClientRect()
+        const w = document.getElementById('whale-img').getBoundingClientRect()
+        return JSON.stringify({ label: document.getElementById('pill-dx-val').textContent,
+          cssVar: document.getElementById('whale-root').style.getPropertyValue('--dshw-pill-dx'),
+          pillLeft: Math.round(b.left), pillRight: Math.round(b.right), winW: window.innerWidth,
+          gap: Math.round(w.left - b.right), inWindow: b.left >= 0, dragging: document.getElementById('balance-pill').classList.contains('dshwv-pill-dragging') })
+      })()`)
+    console.log('dragged by', targetDx, '->', after)
+    close()
+    return
+  }
+
   // node scripts/verify-damage.js <port> shot ["<js 触发表达式>"] [延迟ms] [输出路径]
   if (mode === 'shot') {
     const expr = process.argv[4] || 'window.DamagePulse.emit({ amount: 0.4040, tokens: 6000, cache: 0 })'

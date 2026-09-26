@@ -29,16 +29,17 @@ let settingsWindow = null
 let tray = null
 
 // 血条向左伸出 root 的距离 —— 必须与 CSS 的
-// left = 0.36*base - 0.78*base*len 保持一致，否则窗口不够宽会把血条左边裁掉
-function pillOverhang(basePx, len) {
+// left = 0.36*base - 0.78*base*len + dx 保持一致，否则窗口不够宽会把血条左边裁掉
+function pillOverhang(basePx, len, dx) {
   const n = Math.max(0.6, Math.min(1.6, Number(len) || 1))
-  return Math.max(0, Math.ceil(basePx * (0.78 * n - 0.36) + 24))
+  const d = Math.max(0, -Math.round(Number(dx) || 0)) // 只有向左微调才需要额外空间
+  return Math.max(0, Math.ceil(basePx * (0.78 * n - 0.36) + 24 + d))
 }
 
-function calculateWindowSize(scale = 1.5, pillLen = 1) {
+function calculateWindowSize(scale = 1.5, pillLen = 1, pillDx = 0) {
   const basePx = Math.round(180 * scale)
   return {
-    width: basePx + Math.max(180, pillOverhang(basePx, pillLen)),
+    width: basePx + Math.max(180, pillOverhang(basePx, pillLen, pillDx)),
     height: basePx + 200,
   }
 }
@@ -103,7 +104,7 @@ function watchDisplays() {
 
 function createMainWindow() {
   const config = readConfig()
-  const { width, height } = calculateWindowSize(config.scale || 1.5, config.pillLen)
+  const { width, height } = calculateWindowSize(config.scale || 1.5, config.pillLen, config.pillDx)
   const { x: winX, y: winY } = getSafePosition(width, height, config.windowPos)
 
   mainWindow = new BrowserWindow({
