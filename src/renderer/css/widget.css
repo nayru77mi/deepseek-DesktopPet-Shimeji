@@ -215,56 +215,83 @@ html, body {
   line-height: 1.15;
 }
 
-/* 血条式余额：剩余比例 = 余额 / (余额 + 今日已用)，越低越红 */
-.dshwv-hp-row {
+/* 常驻余额血条（参考 dsh-damage-pulse 的余额悬浮卡）：
+   深色胶囊 + 血量填充，始终可见，不随气泡开关而隐藏。
+   血量 = 余额 / (余额 + 今日已用)，≤50% 转橙、≤20% 转红闪烁。 */
+.dshwv-pill {
+  position: absolute;
+  left: calc(var(--dshw-base) * -0.34);
+  bottom: calc(var(--dshw-base) * 0.05);
+  width: calc(var(--dshw-base) * 0.94);
+  height: calc(var(--dshw-base) * 0.118);
+  border-radius: calc(var(--dshw-base) * 0.06);
+  background: rgba(16, 22, 44, .86);
+  box-shadow: 0 calc(var(--dshw-base) * .008) calc(var(--dshw-base) * .024) rgba(0, 0, 0, .4);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: calc(var(--dshw-u) * 26);
-  margin-top: calc(var(--dshw-u) * 26);
-}
-
-.dshwv-hp {
-  display: block;
-  width: calc(var(--dshw-u) * 440);
-  height: calc(var(--dshw-u) * 34);
-  border-radius: calc(var(--dshw-u) * 17);
-  background: rgba(32, 49, 112, .16);
-  box-shadow: inset 0 0 0 calc(var(--dshw-u) * 3) rgba(32, 49, 112, .3);
+  justify-content: space-between;
+  gap: calc(var(--dshw-base) * .02);
+  padding: 0 calc(var(--dshw-base) * .035);
   overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+  font-size: calc(var(--dshw-base) * .055);
+  line-height: 1;
+  color: #eaf0ff;
+  letter-spacing: .02em;
 }
 
-.dshwv-hp-fill {
-  display: block;
-  height: 100%;
+/* 左吸附时根节点整体镜像，胶囊二次镜像以还原文字方向 */
+.dshwv-root.dshwv-left .dshwv-pill {
+  transform: scaleX(-1);
+}
+
+.dshwv-pill-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
-  border-radius: inherit;
+  height: 100%;
   background: #2fa24c;
+  opacity: .5;
   transition: width .6s cubic-bezier(.4, 0, .2, 1), background-color .4s ease;
 }
 
-.dshwv-hp-fill.is-warn {
+.dshwv-pill-fill.is-warn {
   background: #f0a020;
+  opacity: .58;
 }
 
-.dshwv-hp-fill.is-danger {
+.dshwv-pill-fill.is-danger {
   background: #e0433f;
-  animation: dshwv-hp-blink 1s ease-in-out infinite;
+  opacity: .62;
+  animation: dshwv-pill-blink 1s ease-in-out infinite;
 }
 
-@keyframes dshwv-hp-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: .3; }
+@keyframes dshwv-pill-blink {
+  0%, 100% { opacity: .62; }
+  50% { opacity: .16; }
 }
 
-.dshwv-hp-chip {
-  font-size: calc(var(--dshw-u) * 56);
+.dshwv-pill-text,
+.dshwv-pill-chip {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+}
+
+.dshwv-pill-text b {
+  font-weight: 800;
+  color: #9fe6ff;
+}
+
+.dshwv-pill-chip {
   font-weight: 800;
   letter-spacing: .04em;
 }
 
-.dshwv-hp-chip-off { color: #2fa24c; }
-.dshwv-hp-chip-on { color: #e0433f; }
+.dshwv-pill-chip-off { color: #7ee08a; }
+.dshwv-pill-chip-on { color: #ff9a9a; }
 
 /* 汉堡按钮 */
 .dshwv-menu-btn {
@@ -609,29 +636,30 @@ html, body {
    窗口抖动属于 BUG-001 高危操作（DWM 每帧重建显存表面），这里不做。
    --------------------------------------------------------------- */
 .dshwv-img.dshwv-hit {
-  animation: dshwv-hit .34s cubic-bezier(.36, .07, .19, .97);
+  animation: dshwv-hit .3s cubic-bezier(.36, .07, .19, .97);
 }
 
+/* 白闪已调柔：brightness 峰值 1.45（原 2.6），避免刺眼 */
 @keyframes dshwv-hit {
   0% {
     filter: none;
     transform: translateX(0);
   }
   15% {
-    filter: brightness(2.6) saturate(.3);
-    transform: translateX(-4px);
+    filter: brightness(1.45) saturate(.8);
+    transform: translateX(-3px);
   }
   35% {
-    filter: brightness(1.7) saturate(.7);
-    transform: translateX(4px);
+    filter: brightness(1.25) saturate(.9);
+    transform: translateX(3px);
   }
   55% {
-    filter: brightness(1.15);
-    transform: translateX(-3px);
+    filter: brightness(1.08);
+    transform: translateX(-2px);
   }
   75% {
     filter: none;
-    transform: translateX(2px);
+    transform: translateX(1px);
   }
   100% {
     filter: none;
@@ -640,29 +668,30 @@ html, body {
 }
 
 .dshwv-img.dshwv-hit--crit {
-  animation: dshwv-hit-crit .56s cubic-bezier(.36, .07, .19, .97);
+  animation: dshwv-hit-crit .48s cubic-bezier(.36, .07, .19, .97);
 }
 
+/* 暴击：亮度峰值 1.75（原 3），保留压扁回弹但不再闪瞎 */
 @keyframes dshwv-hit-crit {
   0% {
     filter: none;
     transform: translate(0, 0) scale(1, 1);
   }
   12% {
-    filter: brightness(3) saturate(.2);
-    transform: translate(-6px, 2px) scale(.93, 1.08);
+    filter: brightness(1.75) saturate(.7);
+    transform: translate(-5px, 2px) scale(.94, 1.07);
   }
   30% {
-    filter: brightness(2) saturate(.6);
-    transform: translate(6px, -2px) scale(1.06, .94);
+    filter: brightness(1.4) saturate(.85);
+    transform: translate(5px, -2px) scale(1.05, .95);
   }
   48% {
-    filter: brightness(1.4);
-    transform: translate(-4px, 1px) scale(.97, 1.03);
+    filter: brightness(1.2);
+    transform: translate(-3px, 1px) scale(.98, 1.02);
   }
   66% {
-    filter: brightness(1.15);
-    transform: translate(3px, 0) scale(1.02, .99);
+    filter: brightness(1.08);
+    transform: translate(2px, 0) scale(1.01, .99);
   }
   84% {
     filter: none;

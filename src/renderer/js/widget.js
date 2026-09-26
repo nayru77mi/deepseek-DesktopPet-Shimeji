@@ -16,8 +16,9 @@
   const labelEl = document.getElementById('whale-label')
   const amountEl = document.getElementById('whale-amount')
   const hintEl = document.getElementById('whale-hint')
-  const hpFillEl = document.getElementById('whale-hp-fill')
-  const hpChipEl = document.getElementById('whale-peak-chip')
+  const pillFillEl = document.getElementById('pill-fill')
+  const pillChipEl = document.getElementById('pill-chip')
+  const pillAmountEl = document.getElementById('pill-amount')
   const gifEl = document.getElementById('whale-gif')
   const menuBtn = document.getElementById('menu-btn')
   const menuBox = document.getElementById('menu-box')
@@ -66,7 +67,6 @@
   let costBubbleActive = false
   let costBubbleTimer = null
   let lastCostSeq = 0
-  let lastCostAligned = false
 
   let soundOn = true
   let soundVol = 0.9
@@ -420,9 +420,10 @@
     animId = requestAnimationFrame(step)
   }
 
-  // 血条式余额：剩余 = 余额 / (余额 + 今日已用)，低于 50% 转橙、20% 转红闪烁
+  // 常驻余额血条（不随气泡开关隐藏）：
+  // 剩余 = 余额 / (余额 + 今日已用)，低于 50% 转橙、20% 转红闪烁
   function updateHp() {
-    if (!hpFillEl) return
+    if (!pillFillEl) return
     const bal = Number(state.balance)
     const used = Number(state.todayUsage)
     let ratio = 1
@@ -433,13 +434,23 @@
     }
     if (!isFinite(ratio)) ratio = 1
     ratio = Math.max(0, Math.min(1, ratio))
-    hpFillEl.style.width = (ratio * 100).toFixed(1) + '%'
-    hpFillEl.classList.toggle('is-warn', ratio <= 0.5 && ratio > 0.2)
-    hpFillEl.classList.toggle('is-danger', ratio <= 0.2)
-    if (hpChipEl) {
+    pillFillEl.style.width = (ratio * 100).toFixed(1) + '%'
+    pillFillEl.classList.toggle('is-warn', ratio <= 0.5 && ratio > 0.2)
+    pillFillEl.classList.toggle('is-danger', ratio <= 0.2)
+
+    if (pillAmountEl) {
+      const hasBal = state.balance !== null && state.balance !== undefined && isFinite(bal)
+      pillAmountEl.textContent = !hasBal
+        ? '…'
+        : state.currency === 'CNY'
+          ? '¥ ' + bal.toFixed(2)
+          : bal.toFixed(2) + ' ' + state.currency
+    }
+
+    if (pillChipEl) {
       const peak = !!state.isPeak
-      hpChipEl.textContent = peak ? '峰' : '谷'
-      hpChipEl.className = 'dshwv-hp-chip ' + (peak ? 'dshwv-hp-chip-on' : 'dshwv-hp-chip-off')
+      pillChipEl.textContent = peak ? '峰' : '谷'
+      pillChipEl.className = 'dshwv-pill-chip ' + (peak ? 'dshwv-pill-chip-on' : 'dshwv-pill-chip-off')
     }
   }
 
@@ -1209,14 +1220,17 @@
     // Periodic balance refresh
     setInterval(() => refresh(false), REFRESH_MS)
 
+    // 用主进程当前 seq 对齐，只防重复展示，不丢弃真实事件。
+    // 旧实现直接吞掉「收到的第一个事件」，导致冷启动后点的第一发测试消耗
+    // 毫无反应（表象：设置页测试按钮失灵）。
+    try {
+      const lastTurn = await window.electronAPI.getLastTurn()
+      if (lastTurn && typeof lastTurn.seq === 'number') lastCostSeq = lastTurn.seq
+    } catch (err) {}
+
     // Listen for Turn Cost events
     window.electronAPI.onTurnCost((turnData) => {
       if (!turnData || !turnData.ok || typeof turnData.seq !== 'number') return
-      if (!lastCostAligned) {
-        lastCostSeq = turnData.seq
-        lastCostAligned = true
-        return
-      }
       if (turnData.seq > lastCostSeq) {
         lastCostSeq = turnData.seq
         if (turnData.amount !== null && turnData.amount !== undefined) {

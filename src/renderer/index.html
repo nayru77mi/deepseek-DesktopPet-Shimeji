@@ -24,10 +24,6 @@
           <div id="whale-text" class="dshwv-text">
             <div id="whale-label" class="dshwv-label">DeepSeek 余额</div>
             <div id="whale-amount" class="dshwv-amount">…</div>
-            <div class="dshwv-hp-row">
-              <span class="dshwv-hp"><i id="whale-hp-fill" class="dshwv-hp-fill"></i></span>
-              <span id="whale-peak-chip" class="dshwv-hp-chip dshwv-hp-chip-off">谷</span>
-            </div>
             <div id="whale-hint" class="dshwv-hint">加载中…</div>
           </div>
         </div>
@@ -35,6 +31,13 @@
         <!-- 伤害飘字层：扣费时弹出 -0.0037¥ 类似的伤害数字（纯透明，保持像素穿透） -->
         <div id="damage-layer" class="dshwv-dmg-layer" aria-hidden="true">
           <div id="combo-badge" class="dshwv-combo"></div>
+        </div>
+
+        <!-- 常驻余额血条：始终可见；血量 = 余额 / (余额 + 今日已用)，右侧峰谷徽章 -->
+        <div id="balance-pill" class="dshwv-pill" aria-hidden="true">
+          <i id="pill-fill" class="dshwv-pill-fill"></i>
+          <span class="dshwv-pill-text">余额 <b id="pill-amount">…</b></span>
+          <span id="pill-chip" class="dshwv-pill-chip dshwv-pill-chip-off">谷</span>
         </div>
       </div>
 
