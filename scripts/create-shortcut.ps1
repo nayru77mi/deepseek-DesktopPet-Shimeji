@@ -1,4 +1,4 @@
-$projectRoot = Split-Path -Parent $PSScriptRoot
+﻿$projectRoot = Split-Path -Parent $PSScriptRoot
 $iconPath = Join-Path $projectRoot "assets\icon.ico"
 $desktopPath = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
 $shortcutPath = Join-Path $desktopPath "DeepSeek余额小鲸鱼.lnk"

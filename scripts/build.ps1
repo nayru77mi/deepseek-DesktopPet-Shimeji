@@ -1,4 +1,4 @@
-Write-Host "========================================" -ForegroundColor Cyan
+﻿Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  DeepSeek 余额小鲸鱼 - 一键打包发布程序" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
